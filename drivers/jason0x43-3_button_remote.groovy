@@ -13,7 +13,7 @@ metadata {
 		capability 'Refresh'
 
 		attribute 'button2', 'enum', ['released', 'pressed']
-		attribute 'button3','enum', ['released', 'pressed']
+		attribute 'button3', 'enum', ['released', 'pressed']
 		attribute 'numButtons', 'string'
 
 		fingerprint(
