@@ -236,6 +236,7 @@ async function updateLocalResource(
     return false;
   }
 
+  console.log(`Updating ${type} ${filename}`);
   writeFileSync(join(resourceDirs[type], remoteRes.filename), resource.source);
 
   const hash = hashSource(resource.source);
@@ -258,7 +259,9 @@ async function updateRemoteResource(
   const localRes = localManifest[type][id];
   const remoteRes = remoteManifest[type][id];
   const filename = localRes.filename;
-  const source = readFileSync(filename, { encoding: 'utf8' });
+  const source = readFileSync(join(resourceDirs[type], filename), {
+    encoding: 'utf8'
+  });
 
   const hash = hashSource(source);
   if (hash === localRes.hash) {
@@ -272,7 +275,7 @@ async function updateRemoteResource(
     return false;
   }
 
-  log(`Pushing ${filename}...`);
+  console.log(`Pushing ${filename}...`);
   const res = await putResource(type, id, localRes.version, source);
   const newResource = {
     hash,
