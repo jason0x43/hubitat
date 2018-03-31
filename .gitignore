@@ -1,0 +1,4 @@
+node_modules/
+manifest.json
+.env
+sync/index.js
