@@ -28,7 +28,9 @@ const linkProcessors = {
 
 // Setup cli ------------------------------------------------------------------
 
-program.description('Sync apps and drivers with hubitat');
+program
+  .description('Sync apps and drivers with hubitat')
+  .option('-v, --verbose');
 
 program
   .command('list [type]')
@@ -120,7 +122,7 @@ program
 
       saveManifest(localManifest);
     } catch (error) {
-      die(error.message);
+      die(error);
     }
   });
 
@@ -175,7 +177,7 @@ program
 
       saveManifest(localManifest);
     } catch (error) {
-      die(error.message);
+      die(error);
     }
   });
 
@@ -255,16 +257,23 @@ async function updateRemoteResource(
 ): Promise<boolean> {
   const localRes = localManifest[type][id];
   const remoteRes = remoteManifest[type][id];
-  const filename = join(resourceDirs[type], localRes.filename);
+  const filename = localRes.filename;
   const source = readFileSync(filename, { encoding: 'utf8' });
+
+  const hash = hashSource(source);
+  if (hash === localRes.hash) {
+    // File hasn't changed -- don't push
+    log(`${filename} hasn't changed; not pushing`);
+    return true;
+  }
 
   if (localRes.version !== remoteRes.version) {
     console.error(`${type}:${id} is out of date; not pushing`);
     return false;
   }
 
+  log(`Pushing ${filename}...`);
   const res = await putResource(type, id, localRes.version, source);
-  const hash = hashSource(source);
   const newResource = {
     hash,
     filename,
@@ -288,8 +297,12 @@ function needsCommit(file: string) {
 /**
  * Display a message and quit
  */
-function die(message: string) {
-  console.error(message);
+function die(message: string | Error) {
+  if (typeof message === 'string') {
+    console.error(message);
+  } else {
+    console.error(message.stack);
+  }
   process.exit(1);
 }
 
@@ -508,6 +521,15 @@ function hashSource(source: string) {
   const hash = createHash('sha512');
   hash.update(source);
   return hash.digest('hex');
+}
+
+/**
+ * Debug log
+ */
+function log(message) {
+  if (program.verbose) {
+    console.log(message);
+  }
 }
 
 interface ResponseResource {
