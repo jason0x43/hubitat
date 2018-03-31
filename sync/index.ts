@@ -229,14 +229,20 @@ async function updateLocalResource(
 ): Promise<boolean> {
   const resource = await getResource(type, id);
   const remoteRes = remoteManifest[type][resource.id];
+  const localRes = localManifest[type][resource.id];
   const filename = join(resourceDirs[type], remoteRes.filename);
 
-  if (needsCommit(filename)) {
-    console.log(`Skipping ${filename}; please commit first`);
-    return false;
+  if (localRes) {
+    const source = readFileSync(filename, { encoding: 'utf8' });
+    const sourceHash = hashSource(source);
+    // If the local has changed from the last time it was synced with Hubitat
+    // *and* it hasn't been committed, don't update
+    if (sourceHash !== localRes.hash && needsCommit(filename)) {
+      console.log(`Skipping ${filename}; please commit first`);
+      return false;
+    }
   }
 
-  const localRes = localManifest[type][resource.id];
   if (localRes && remoteRes.hash === localRes.hash) {
     log(`Skipping ${filename}; no changes`);
     return true;
@@ -277,7 +283,7 @@ async function updateRemoteResource(
   }
 
   if (localRes.version !== remoteRes.version) {
-    console.error(`${type}:${id} is out of date; not pushing`);
+    console.error(`${type} ${filename} is out of date; pull first`);
     return false;
   }
 
