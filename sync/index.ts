@@ -236,6 +236,12 @@ async function updateLocalResource(
     return false;
   }
 
+  const localRes = localManifest[type][resource.id];
+  if (localRes && remoteRes.hash === localRes.hash) {
+    log(`Skipping ${filename}; no changes`);
+    return true;
+  }
+
   console.log(`Updating ${type} ${filename}`);
   writeFileSync(join(resourceDirs[type], remoteRes.filename), resource.source);
 
