@@ -65,7 +65,9 @@ def updateColorTemp() {
     def sunrise = times.sunrise
     def sunset = times.sunset
 
-    if (now.after(sunset) && now.before(sunrise)) {
+    // This is an 'or' because after midnight sunset will switch
+    // to the next day
+    if (now.after(sunset) || now.before(sunrise)) {
         // At night it's always 2200
         state.colorTemp = 2200;
     } else {
