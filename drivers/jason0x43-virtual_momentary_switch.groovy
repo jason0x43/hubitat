@@ -6,20 +6,20 @@
  */
 
 metadata {
-	definition (name: 'Virtual Momentary Switch', namespace: 'jason0x43', author: 'jason0x43') {
+	definition(name: 'Virtual Momentary Switch', namespace: 'jason0x43', author: 'jason0x43') {
 		capability 'Actuator'
 		capability 'Switch'
 		capability 'Sensor'
 	}
 
-    preferences {	
+	preferences {	
 		input(
-            name: 'delayNum',
-            type: 'number',
-            title: 'Delay before switching off (default is 3s)',
-            required: true,
-            defaultValue: 3
-        )	
+			name: 'delayNum',
+			type: 'number',
+			title: 'Delay before switching off (default is 3s)',
+			required: true,
+			defaultValue: 3
+		)	
 	}
 }
 
