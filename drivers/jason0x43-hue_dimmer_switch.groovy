@@ -2,6 +2,8 @@
  * Hue Dimmer Switch
  *
  * Based on the driver by Stephen McLaughlin
+ *
+ * Modified by Jason Cheatham for Hubitat compatibility, 2018-03-24
  */
 
 metadata {
@@ -10,7 +12,7 @@ metadata {
 		capability 'Battery'
 		capability 'Refresh'
 		capability 'PushableButton'
-        capability 'HoldableButton'
+		capability 'HoldableButton'
 		capability 'Sensor'
 
 		fingerprint(
@@ -29,7 +31,7 @@ metadata {
 }
 
 def parse(description) {
-    log.debug 'Parsing ' + description
+	log.debug 'Parsing ' + description
 
 	def msg = zigbee.parse(description)
 
@@ -76,7 +78,7 @@ def refresh() {
 }
 
 def configure() {
-    log.debug 'Configuring'
+	log.debug 'Configuring'
 
 	// def zigbeeId = swapEndianHex(device.hub.zigbeeId)
 	// log.debug 'Configuring Reporting and Bindings.'
@@ -123,8 +125,8 @@ def updated() {
 }
 
 private parseReportAttributeMessage(description) {
-    log.trace 'Parsing report attribute message ' + description
-    
+	log.trace 'Parsing report attribute message ' + description
+
 	def descMap = (description - 'read attr - ').split(',').inject([:]) { map, param ->
 		def nameAndValue = param.split(':')
 		map += [(nameAndValue[0].trim()):nameAndValue[1].trim()]
@@ -141,13 +143,13 @@ private parseReportAttributeMessage(description) {
 }
 
 private shouldProcessMessage(cluster) {
-    log.debug 'Checking if should process message'
-    
+	log.debug 'Checking if should process message'
+
 	// 0x0B is default response indicating message got through
 	def ignoredMessage = cluster.profileId != 0x0104 ||
-        cluster.command == 0x0B ||
-        (cluster.data.size() > 0 && cluster.data.first() == 0x3e)
-    
+	cluster.command == 0x0B ||
+	(cluster.data.size() > 0 && cluster.data.first() == 0x3e)
+
 	return !ignoredMessage
 }
 
@@ -219,7 +221,7 @@ private getBatteryResult(rawValue) {
 }
 
 private getButtonResult(rawValue) {
-    log.trace 'Getting button for ' + rawValue
+	log.trace 'Getting button for ' + rawValue
 
 	def result = [
 		name: 'button',
@@ -259,11 +261,11 @@ private getButtonResult(rawValue) {
 }
 
 private parseCatchAllMessage(description) {
-    log.trace 'Parsing catchall message'
+	log.trace 'Parsing catchall message'
 
 	def resultMap = [:]
 	def cluster = zigbee.parse(description)
-    
+
 	if (shouldProcessMessage(cluster)) {
 		switch (cluster.clusterId) {
 			case 0x0001:

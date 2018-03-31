@@ -86,7 +86,7 @@ def validate(type) {
 		try {
 			httpPost(params) { response ->
 				if (response.status != 200) {
-                    handleError(response)
+					handleError(response)
 				} else {
 					if (type == 'deviceList') {
 						log.debug 'Device list generated'
@@ -116,7 +116,7 @@ def getSoundOptions() {
 		uri: "https://api.pushover.net/1/sounds.json?token=${apiKey}"
 	) { response ->
 		if (response.status != 200) {
-            handleError(response)
+			handleError(response)
 		} else {
 			log.debug 'Notification List Generated'
 			mySounds = response.data.sounds
@@ -177,7 +177,7 @@ def deviceNotification(message) {
 	if (apiKey =~ /[A-Za-z0-9]{30}/ && userKey =~ /[A-Za-z0-9]{30}/) {
 		httpPost(params) { response ->
 			if (response.status != 200) {
-                handleError(response)
+				handleError(response)
 			} else {
 				log.debug 'Message Received by Pushover server'
 			}

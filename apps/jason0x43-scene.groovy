@@ -11,6 +11,9 @@
  * This is a customized version of Scene Machine that automatically creates a
  * switch to trigger the scene and that can handle color temperature as well as
  * light level.
+ *
+ * Use License: Non-Profit Open Software License version 3.0 (NPOSL-3.0)
+ *              http://opensource.org/licenses/NPOSL-3.0
  */
 
 definition(
