@@ -289,6 +289,13 @@ async function updateRemoteResource(
 
   console.log(`Pushing ${filename}...`);
   const res = await putResource(type, id, localRes.version, source);
+  if (res.status === 'error') {
+    console.error(
+      `Error pushing ${type} ${filename}: ${trim(res.errorMessage)}`
+    );
+    return false;
+  }
+
   const newResource = {
     hash,
     filename,
@@ -552,6 +559,7 @@ interface ResponseResource {
   version: number;
   source: string;
   status: string;
+  errorMessage?: string;
 }
 
 interface FileResource extends ResponseResource {
