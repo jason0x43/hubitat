@@ -1,8 +1,8 @@
 {
-  "name": "sync",
+  "name": "hubitat",
   "version": "1.0.0",
   "private": true,
-  "description": "Sync apps and devices with Hubitat",
+  "description": "Interact with Hubitat",
   "main": "index.js",
   "scripts": {
     "build": "tsc"
@@ -11,11 +11,14 @@
   "author": "Jason Cheatham <j.cheatham@gmail.com>",
   "license": "ISC",
   "dependencies": {
+    "@types/ws": "~4.0.2",
     "cheerio": "~1.0.0-rc.2",
     "commander": "~2.15.1",
     "dotenv-safe": "~5.0.1",
     "easy-table": "~1.1.1",
-    "node-fetch": "~2.1.2"
+    "html-entities": "~1.2.1",
+    "node-fetch": "~2.1.2",
+    "ws": "~5.1.0"
   },
   "devDependencies": {
     "@types/cheerio": "~0.22.7",

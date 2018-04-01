@@ -6,12 +6,11 @@ import { createHash } from 'crypto';
 import { execSync } from 'child_process';
 import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
-import * as program from 'commander';
+import { Context, die } from './common';
+import { CommanderStatic } from 'commander';
 
 const Table = require('easy-table');
-require('dotenv-safe').config();
 
-const hubitat = process.env.HUBITAT;
 const manifestFile = join(__dirname, '..', 'manifest.json');
 const resourceDirs = {
   app: relative(process.cwd(), join(__dirname, '..', 'apps')),
@@ -26,165 +25,165 @@ const linkProcessors = {
   driver: link => link.text()
 };
 
+let program: CommanderStatic;
+let hubitatHost: string;
+
 // Setup cli ------------------------------------------------------------------
 
-program
-  .description('Sync apps and drivers with hubitat')
-  .option('-v, --verbose');
+export default function init(context: Context) {
+  program = context.program;
+  hubitatHost = context.hubitatHost;
 
-program
-  .command('list [type]')
-  .description(`List items on Hubitat, optional of type 'drivers' or 'apps'`)
-  .action(async type => {
-    type = type ? validateType(type) : type;
-    const t = new Table();
+  program
+    .command('list [type]')
+    .description(
+      `List drivers and apps on Hubitat, optional of type 'drivers' or 'apps'`
+    )
+    .action(async type => {
+      type = type ? validateType(type) : type;
+      const t = new Table();
 
-    if (!type || type == 'driver') {
-      const drivers = await getResources('driver');
-      drivers.forEach(driver => {
-        addResourceRow(t, driver, type ? undefined : 'driver');
-      });
+      if (!type || type == 'driver') {
+        const drivers = await getResources('driver');
+        drivers.forEach(driver => {
+          addResourceRow(t, driver, type ? undefined : 'driver');
+        });
+      }
+      if (!type || type == 'app') {
+        const apps = await getResources('app');
+        apps.forEach(app => {
+          addResourceRow(t, app, type ? undefined : 'app');
+        });
+      }
+
+      console.log(t.toString());
+    });
+
+  function addResourceRow(
+    t: typeof Table,
+    resource: FileResource,
+    type?: ResourceType
+  ) {
+    if (type) {
+      t.cell('type', type);
     }
-    if (!type || type == 'app') {
-      const apps = await getResources('app');
-      apps.forEach(app => {
-        addResourceRow(t, app, type ? undefined : 'app');
-      });
-    }
-
-    console.log(t.toString());
-  });
-
-function addResourceRow(
-  t: typeof Table,
-  resource: FileResource,
-  type?: ResourceType
-) {
-  if (type) {
-    t.cell('type', type);
+    t.cell('id', resource.id, Table.number());
+    t.cell('version', resource.version, Table.number());
+    t.cell('filename', resource.filename);
+    t.newRow();
   }
-  t.cell('id', resource.id, Table.number());
-  t.cell('version', resource.version, Table.number());
-  t.cell('filename', resource.filename);
-  t.newRow();
-}
 
-// Pull a specific resource from Hubitat
-program
-  .command('pull [type] [id]')
-  .description('Pull items from Hubitat to this repo')
-  .action(async (type, id) => {
-    try {
-      if (type) {
-        type = validateType(type);
+  // Pull a specific resource from Hubitat
+  program
+    .command('pull [type] [id]')
+    .description('Pull drivers and apps from Hubitat to this repo')
+    .action(async (type, id) => {
+      try {
+        if (type) {
+          type = validateType(type);
+        }
+        if (id) {
+          validateId(id);
+        }
+
+        // The remote manifest will be used for filenames (if files don't exist
+        // locally)
+        const remoteManifest = await getRemoteManifest();
+        const localManifest = loadManifest();
+
+        if (!type) {
+          console.log('Pulling everything...');
+          await Promise.all(
+            ['app', 'driver'].map(async (type: ResourceType) => {
+              await Promise.all(
+                Object.keys(remoteManifest[type]).map(async id => {
+                  await updateLocalResource(
+                    type,
+                    Number(id),
+                    localManifest,
+                    remoteManifest
+                  );
+                })
+              );
+            })
+          );
+        } else if (!id) {
+          console.log(`Pulling all ${type}s...`);
+          await Promise.all(
+            Object.keys(remoteManifest[type]).map(async id => {
+              updateLocalResource(
+                type,
+                Number(id),
+                localManifest,
+                remoteManifest
+              );
+            })
+          );
+        } else {
+          console.log(`Pulling ${type}:${id}...`);
+          updateLocalResource(type, id, localManifest, remoteManifest);
+        }
+
+        saveManifest(localManifest);
+      } catch (error) {
+        die(error);
       }
-      if (id) {
-        validateId(id);
+    });
+
+  // Push a specific resource to Hubitat
+  program
+    .command('push [type] [id]')
+    .description('Push apps and drivers from this repo to Hubitat')
+    .action(async (type, id) => {
+      try {
+        if (type) {
+          type = validateType(type);
+        }
+        if (id) {
+          validateId(id);
+        }
+
+        const remoteManifest = await getRemoteManifest();
+        const localManifest = loadManifest();
+
+        if (!type) {
+          console.log('Pushing everything...');
+          await Promise.all(
+            ['app', 'driver'].map(async (type: ResourceType) => {
+              await Promise.all(
+                Object.keys(localManifest[type]).map(async id => {
+                  await updateRemoteResource(
+                    type,
+                    Number(id),
+                    localManifest,
+                    remoteManifest
+                  );
+                })
+              );
+            })
+          );
+        } else if (!id) {
+          console.log(`Pushing all ${type}...`);
+          await Promise.all(
+            Object.keys(localManifest[type]).map(async id => {
+              await updateRemoteResource(
+                type,
+                Number(id),
+                localManifest,
+                remoteManifest
+              );
+            })
+          );
+        } else {
+          console.log(`Pushing ${type}:${id}...`);
+          await updateRemoteResource(type, id, localManifest, remoteManifest);
+        }
+
+        saveManifest(localManifest);
+      } catch (error) {
+        die(error);
       }
-
-      // The remote manifest will be used for filenames (if files don't exist
-      // locally)
-      const remoteManifest = await getRemoteManifest();
-      const localManifest = loadManifest();
-
-      if (!type) {
-        console.log('Pulling everything...');
-        await Promise.all(
-          ['app', 'driver'].map(async (type: ResourceType) => {
-            await Promise.all(
-              Object.keys(remoteManifest[type]).map(async id => {
-                await updateLocalResource(
-                  type,
-                  Number(id),
-                  localManifest,
-                  remoteManifest
-                );
-              })
-            );
-          })
-        );
-      } else if (!id) {
-        console.log(`Pulling all ${type}s...`);
-        await Promise.all(
-          Object.keys(remoteManifest[type]).map(async id => {
-            updateLocalResource(
-              type,
-              Number(id),
-              localManifest,
-              remoteManifest
-            );
-          })
-        );
-      } else {
-        console.log(`Pulling ${type}:${id}...`);
-        updateLocalResource(type, id, localManifest, remoteManifest);
-      }
-
-      saveManifest(localManifest);
-    } catch (error) {
-      die(error);
-    }
-  });
-
-// Push a specific resource to Hubitat
-program
-  .command('push [type] [id]')
-  .description('Push apps and drivers from this repo to Hubitat')
-  .action(async (type, id) => {
-    try {
-      if (type) {
-        type = validateType(type);
-      }
-      if (id) {
-        validateId(id);
-      }
-
-      const remoteManifest = await getRemoteManifest();
-      const localManifest = loadManifest();
-
-      if (!type) {
-        console.log('Pushing everything...');
-        await Promise.all(
-          ['app', 'driver'].map(async (type: ResourceType) => {
-            await Promise.all(
-              Object.keys(localManifest[type]).map(async id => {
-                await updateRemoteResource(
-                  type,
-                  Number(id),
-                  localManifest,
-                  remoteManifest
-                );
-              })
-            );
-          })
-        );
-      } else if (!id) {
-        console.log(`Pushing all ${type}...`);
-        await Promise.all(
-          Object.keys(localManifest[type]).map(async id => {
-            await updateRemoteResource(
-              type,
-              Number(id),
-              localManifest,
-              remoteManifest
-            );
-          })
-        );
-      } else {
-        console.log(`Pushing ${type}:${id}...`);
-        await updateRemoteResource(type, id, localManifest, remoteManifest);
-      }
-
-      saveManifest(localManifest);
-    } catch (error) {
-      die(error);
-    }
-  });
-
-program.parse(process.argv);
-
-if (!process.argv.slice(2).length) {
-  program.outputHelp();
+    });
 }
 
 // Implementation -------------------------------------------------------------
@@ -317,18 +316,6 @@ function needsCommit(file: string) {
 }
 
 /**
- * Display a message and quit
- */
-function die(message: string | Error) {
-  if (typeof message === 'string') {
-    console.error(message);
-  } else {
-    console.error(message.stack);
-  }
-  process.exit(1);
-}
-
-/**
  * Verify that a type variable is a ResourceType
  */
 function validateType(type: string): ResourceType {
@@ -388,7 +375,7 @@ function toManifestEntry(resource: ManifestEntry) {
  * Get a resource list from Hubitat
  */
 async function getResources(resource: ResourceType): Promise<FileResource[]> {
-  const response = await fetch(`${hubitat}/${resource}/list`);
+  const response = await fetch(`http://${hubitatHost}/${resource}/list`);
   const html = await response.text();
   const $ = cheerio.load(html);
   const selector = tableSelectors[resource];
@@ -424,7 +411,9 @@ async function getResource(
   type: ResourceType,
   id: number
 ): Promise<ResponseResource> {
-  const response = await fetch(`${hubitat}/${type}/ajax/code?id=${id}`);
+  const response = await fetch(
+    `http://${hubitatHost}/${type}/ajax/code?id=${id}`
+  );
   if (response.status !== 200) {
     throw new Error(`Error getting ${type} ${id}: ${response.statusText}`);
   }
@@ -440,7 +429,7 @@ async function putResource(
   version: number,
   source: string
 ): Promise<ResponseResource> {
-  const response = await fetch(`${hubitat}/${type}/ajax/update`, {
+  const response = await fetch(`http://${hubitatHost}/${type}/ajax/update`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: simpleEncode({ id, version, source })
