@@ -106,7 +106,6 @@ export interface Resource {
 
 export interface CodeResource extends Resource {
   namespace: string;
-  version: number;
 }
 
 export interface DeviceResource extends Resource {
@@ -128,18 +127,11 @@ function processCodeRow(
 
   const link = $(row.find('td')[0]).find('a');
   const text = type === 'app' ? link.attr('title') : link.text();
-  const version = Number(
-    link
-      .attr('href')
-      .split('/')
-      .pop()
-  );
   const [namespace, name] = text.split(':').map(trim);
 
   return {
     id,
     type,
-    version,
     name: name!,
     namespace: namespace!
   };

@@ -5,6 +5,7 @@ import { Context } from './common';
 import initSync from './sync';
 import initLog from './log';
 import initList from './list';
+import initInfo from './info';
 
 require('dotenv-safe').config();
 
@@ -18,6 +19,7 @@ const context: Context = {
 initSync(context);
 initLog(context);
 initList(context);
+initInfo(context);
 
 program.parse(process.argv);
 

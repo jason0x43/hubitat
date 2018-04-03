@@ -57,7 +57,6 @@ export default function init(context: Context) {
       t.cell('type', type);
     }
     t.cell('id', resource.id, Table.number());
-    t.cell('version', resource.version, Table.number());
     t.cell('name', resource.name, Table.string());
     t.newRow();
   }
