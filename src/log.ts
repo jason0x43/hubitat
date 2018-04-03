@@ -8,18 +8,16 @@ export default function init(context: Context) {
   const { program, hubitatHost } = context;
 
   program
-    .command('log [type]')
-    .option('-n, --name <name>', 'App or device name')
-    .option('-i, --id <id>', 'App or device id', validateId)
+    .command('log [type] [id]')
     .description(
       'Log events for a given source, type of source, or all sources'
     )
-    .action((type: string, cmd: { name?: string; id?: number }) => {
-      const rtype = validateType(type);
-      const _name = validateName(cmd.name);
+    .action((type?: string, id?: string) => {
+      const _type = validateType(type);
+      const _id = validateId(id);
 
-      if ((cmd.id || _name) && !rtype) {
-        die('An ID or name requires a type');
+      if (_id && !_type) {
+        die('An ID requires a type');
       }
 
       const ws = new WebSocket(`ws://${hubitatHost}/logsocket`);
@@ -31,13 +29,10 @@ export default function init(context: Context) {
 
       ws.on('message', (data: string) => {
         const msg: Message = JSON.parse(data);
-        if (_name && msg.name !== _name) {
+        if (_type && msg.type !== _type) {
           return;
         }
-        if (rtype && msg.type !== rtype) {
-          return;
-        }
-        if (cmd.id && msg.id !== cmd.id) {
+        if (_id && msg.id !== _id) {
           return;
         }
         logMessage(entities, msg);
@@ -63,13 +58,6 @@ function validateType(type?: string) {
     return 'dev';
   }
   die('Type should be "app" or "dev"');
-}
-
-function validateName(name?: string) {
-  if (typeof name === 'string') {
-    return name;
-  }
-  return null;
 }
 
 interface Message {
