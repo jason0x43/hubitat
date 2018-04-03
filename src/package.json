@@ -11,6 +11,8 @@
   "author": "Jason Cheatham <j.cheatham@gmail.com>",
   "license": "ISC",
   "dependencies": {
+    "@types/html-entities": "~1.2.16",
+    "@types/node-fetch": "~1.6.7",
     "@types/ws": "~4.0.2",
     "cheerio": "~1.0.0-rc.2",
     "commander": "~2.15.1",

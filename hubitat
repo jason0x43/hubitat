@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -e
+
+needsRebuild() {
+	for ts in src/*.ts; do
+		js="${ts%.*}.js"
+		if [[ ! -f $js || $ts -nt $js ]]; then
+			echo 'rebuild'
+			return
+		fi
+	done
+}
+
+if [[ ! -d 'src/node_modules' ]]; then
+	echo 'Installing script dependencies...'
+	cd src
+	npm install
+	cd ..
+fi
+
+if [[ ! -f src/index.js || -n $(needsRebuild) ]]; then
+	echo 'Building the script...'
+	cd src
+	npm run build
+	cd ..
+fi
+
+node src/index.js $*

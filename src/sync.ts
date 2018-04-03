@@ -1,77 +1,35 @@
-#!/usr/bin/env node
-
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, relative } from 'path';
 import { createHash } from 'crypto';
 import { execSync } from 'child_process';
 import fetch from 'node-fetch';
-import * as cheerio from 'cheerio';
-import { Context, die } from './common';
+import {
+  Context,
+  die,
+  ResourceType,
+  Logger,
+  createLogger,
+  getResources,
+  trim
+} from './common';
 import { CommanderStatic } from 'commander';
-
-const Table = require('easy-table');
 
 const manifestFile = join(__dirname, '..', 'manifest.json');
 const resourceDirs = {
   app: relative(process.cwd(), join(__dirname, '..', 'apps')),
   driver: relative(process.cwd(), join(__dirname, '..', 'drivers'))
 };
-const tableSelectors = {
-  app: '#hubitapps-table tbody .app-row',
-  driver: '#devicetype-table tbody .device-row'
-};
-const linkProcessors = {
-  app: link => link.attr('title'),
-  driver: link => link.text()
-};
 
 let program: CommanderStatic;
 let hubitatHost: string;
+let log: Logger;
 
 // Setup cli ------------------------------------------------------------------
 
 export default function init(context: Context) {
   program = context.program;
   hubitatHost = context.hubitatHost;
-
-  program
-    .command('list [type]')
-    .description(
-      `List drivers and apps on Hubitat, optional of type 'drivers' or 'apps'`
-    )
-    .action(async type => {
-      type = type ? validateType(type) : type;
-      const t = new Table();
-
-      if (!type || type == 'driver') {
-        const drivers = await getResources('driver');
-        drivers.forEach(driver => {
-          addResourceRow(t, driver, type ? undefined : 'driver');
-        });
-      }
-      if (!type || type == 'app') {
-        const apps = await getResources('app');
-        apps.forEach(app => {
-          addResourceRow(t, app, type ? undefined : 'app');
-        });
-      }
-
-      console.log(t.toString());
-    });
-
-  function addResourceRow(
-    t: typeof Table,
-    resource: FileResource,
-    type?: ResourceType
-  ) {
-    if (type) {
-      t.cell('type', type);
-    }
-    t.cell('id', resource.id, Table.number());
-    t.cell('version', resource.version, Table.number());
-    t.cell('filename', resource.filename);
-    t.newRow();
-  }
+  log = createLogger(program);
 
   // Pull a specific resource from Hubitat
   program
@@ -79,8 +37,9 @@ export default function init(context: Context) {
     .description('Pull drivers and apps from Hubitat to this repo')
     .action(async (type, id) => {
       try {
+        let rtype: CodeResourceType | undefined;
         if (type) {
-          type = validateType(type);
+          rtype = validateCodeType(type);
         }
         if (id) {
           validateId(id);
@@ -91,10 +50,11 @@ export default function init(context: Context) {
         const remoteManifest = await getRemoteManifest();
         const localManifest = loadManifest();
 
-        if (!type) {
+        if (!rtype) {
           console.log('Pulling everything...');
           await Promise.all(
-            ['app', 'driver'].map(async (type: ResourceType) => {
+            ['app', 'driver'].map(async typeStr => {
+              const type = <keyof Manifest>typeStr;
               await Promise.all(
                 Object.keys(remoteManifest[type]).map(async id => {
                   await updateLocalResource(
@@ -108,11 +68,11 @@ export default function init(context: Context) {
             })
           );
         } else if (!id) {
-          console.log(`Pulling all ${type}s...`);
+          console.log(`Pulling all ${rtype}s...`);
           await Promise.all(
-            Object.keys(remoteManifest[type]).map(async id => {
+            Object.keys(remoteManifest[rtype]).map(async id => {
               updateLocalResource(
-                type,
+                rtype!,
                 Number(id),
                 localManifest,
                 remoteManifest
@@ -135,9 +95,11 @@ export default function init(context: Context) {
     .command('push [type] [id]')
     .description('Push apps and drivers from this repo to Hubitat')
     .action(async (type, id) => {
+      let rtype: keyof Manifest | undefined;
+
       try {
         if (type) {
-          type = validateType(type);
+          rtype = validateCodeType(type);
         }
         if (id) {
           validateId(id);
@@ -146,10 +108,11 @@ export default function init(context: Context) {
         const remoteManifest = await getRemoteManifest();
         const localManifest = loadManifest();
 
-        if (!type) {
+        if (!rtype) {
           console.log('Pushing everything...');
           await Promise.all(
-            ['app', 'driver'].map(async (type: ResourceType) => {
+            ['app', 'driver'].map(async typeStr => {
+              const type = <CodeResourceType>typeStr;
               await Promise.all(
                 Object.keys(localManifest[type]).map(async id => {
                   await updateRemoteResource(
@@ -163,11 +126,11 @@ export default function init(context: Context) {
             })
           );
         } else if (!id) {
-          console.log(`Pushing all ${type}...`);
+          console.log(`Pushing all ${rtype}...`);
           await Promise.all(
-            Object.keys(localManifest[type]).map(async id => {
+            Object.keys(localManifest[rtype]).map(async id => {
               await updateRemoteResource(
-                type,
+                rtype!,
                 Number(id),
                 localManifest,
                 remoteManifest
@@ -191,19 +154,19 @@ export default function init(context: Context) {
 /**
  * Get a manifest of resources available on the Hubitat
  */
-async function getRemoteManifest(type?: ResourceType): Promise<Manifest> {
+async function getRemoteManifest(type?: CodeResourceType): Promise<Manifest> {
   const manifest: Manifest = {
     app: {},
     driver: {}
   };
 
   if (type) {
-    const resources = await getResources(type);
+    const resources = await getFileResources(type);
     manifest[type] = toManifestSection(resources);
   } else {
-    const apps = await getResources('app');
+    const apps = await getFileResources('app');
     manifest.app = toManifestSection(apps);
-    const drivers = await getResources('driver');
+    const drivers = await getFileResources('driver');
     manifest.driver = toManifestSection(drivers);
   }
 
@@ -221,7 +184,7 @@ async function getRemoteManifest(type?: ResourceType): Promise<Manifest> {
  * in unstaged changes in the local repo.
  */
 async function updateLocalResource(
-  type: ResourceType,
+  type: CodeResourceType,
   id: number,
   localManifest: Manifest,
   remoteManifest: Manifest
@@ -262,7 +225,7 @@ async function updateLocalResource(
  * be added to the manifest.
  */
 async function updateRemoteResource(
-  type: ResourceType,
+  type: CodeResourceType,
   id: number,
   localManifest: Manifest,
   remoteManifest: Manifest
@@ -316,19 +279,6 @@ function needsCommit(file: string) {
 }
 
 /**
- * Verify that a type variable is a ResourceType
- */
-function validateType(type: string): ResourceType {
-  if (/apps?/.test(type)) {
-    return 'app';
-  } else if (/drivers?/.test(type)) {
-    return 'driver';
-  } else {
-    die(`Invalid type "${type}"`);
-  }
-}
-
-/**
  * Verify that an id is in a valid format
  */
 function validateId(id: string): number {
@@ -338,13 +288,6 @@ function validateId(id: string): number {
   }
 
   return numId;
-}
-
-/**
- * Return a string representation of a FileResource
- */
-function resourceToString(item: FileResource) {
-  return `${item.type}: ${item.filename} [${item.version}]`;
 }
 
 /**
@@ -374,30 +317,19 @@ function toManifestEntry(resource: ManifestEntry) {
 /**
  * Get a resource list from Hubitat
  */
-async function getResources(resource: ResourceType): Promise<FileResource[]> {
-  const response = await fetch(`http://${hubitatHost}/${resource}/list`);
-  const html = await response.text();
-  const $ = cheerio.load(html);
-  const selector = tableSelectors[resource];
-  const getText = linkProcessors[resource];
+async function getFileResources(
+  resource: CodeResourceType
+): Promise<FileResource[]> {
+  const resources = await getResources(hubitatHost, resource);
 
-  const rows = $(selector).toArray();
   return Promise.all(
-    rows.map(async elem => {
-      const row = $(elem);
-      const id = row.data(`${resource}-id`);
-      if (!id) {
-        throw new Error(`No ID in row ${row.text()}`);
-      }
-
-      const link = $(row.find('td')[0]).find('a');
-      const text = getText(link);
-      const [namespace, name] = text.split(':').map(trim);
-      const filename = `${namespace}-${name
+    resources.map(async res => {
+      const { id, name, namespace } = res;
+      const filename = `${namespace}-${name!
         .toLowerCase()
         .replace(/\s/g, '_')}.groovy`;
 
-      const item = await getResource(resource, id);
+      const item = await getResource(resource, Number(id));
       const hash = hashSource(item.source);
       return { filename, hash, type: resource, ...item };
     })
@@ -456,13 +388,6 @@ function simpleEncode(value: any, key?: string, list?: string[]) {
 }
 
 /**
- * Trim whitespace from either end of a string
- */
-function trim(str: string) {
-  return str.replace(/^\s+/, '').replace(/\s+$/, '');
-}
-
-/**
  * Load the current manifest file
  */
 function loadManifest(): Manifest {
@@ -491,41 +416,6 @@ function saveManifest(manifest: Manifest) {
 }
 
 /**
- * Indicate whether a local manifest is up to date with a remote
- */
-function isUpToDate(local: Manifest, remote: Manifest): boolean {
-  return (
-    isSectionUpToDate(local.app, remote.app) &&
-    isSectionUpToDate(local.driver, remote.driver)
-  );
-}
-
-/**
- * Indicate whether a section of a local manifest is up to date with the
- * corresponding section of a remote manifest
- */
-function isSectionUpToDate(
-  local: ManifestResources,
-  remote: ManifestResources
-): boolean {
-  const localKeys = Object.keys(local);
-  const remoteKeys = Object.keys(remote);
-  if (localKeys.length !== localKeys.length) {
-    return false;
-  }
-  for (let i = 0; i < localKeys.length; i++) {
-    if (remoteKeys.indexOf(localKeys[i]) === -1) {
-      return false;
-    }
-    const key = localKeys[i];
-    if (local[key].version === remote[key].version) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
  * Generate a SHA512 hash of a source string
  */
 function hashSource(source: string) {
@@ -534,30 +424,17 @@ function hashSource(source: string) {
   return hash.digest('hex');
 }
 
-/**
- * Debug log
- */
-function log(message) {
-  if (program.verbose) {
-    console.log(message);
+function validateCodeType(type: string): CodeResourceType {
+  if (/apps?/.test(type)) {
+    return 'app';
   }
-}
+  if (/drivers?/.test(type)) {
+    return 'driver';
+  }
 
-interface ResponseResource {
-  id: number;
-  version: number;
-  source: string;
-  status: string;
-  errorMessage?: string;
+  die(`Invalid type "${type}"`);
+  return <CodeResourceType>'';
 }
-
-interface FileResource extends ResponseResource {
-  filename: string;
-  hash: string;
-  type: ResourceType;
-}
-
-export type ResourceType = 'driver' | 'app';
 
 interface Manifest {
   app: ManifestResources;
@@ -572,4 +449,20 @@ interface ManifestEntry {
   filename: string;
   version: number;
   hash: string;
+}
+
+type CodeResourceType = 'app' | 'driver';
+
+interface ResponseResource {
+  id: number;
+  version: number;
+  source: string;
+  status: string;
+  errorMessage?: string;
+}
+
+interface FileResource extends ResponseResource {
+  filename: string;
+  hash: string;
+  type: ResourceType;
 }

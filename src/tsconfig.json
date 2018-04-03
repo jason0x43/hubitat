@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2015",
+    "strict": true,
+    "noUnusedParameters": true,
+    "noUnusedLocals": true
+  },
+  "include": [
+    "*.ts"
+  ]
+}
