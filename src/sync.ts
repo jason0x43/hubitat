@@ -10,7 +10,9 @@ import {
   Logger,
   createLogger,
   getResources,
-  trim
+  simpleEncode,
+  trim,
+  validateId
 } from './common';
 import { CommanderStatic } from 'commander';
 
@@ -279,18 +281,6 @@ function needsCommit(file: string) {
 }
 
 /**
- * Verify that an id is in a valid format
- */
-function validateId(id: string): number {
-  const numId = Number(id);
-  if (isNaN(Number(id))) {
-    die('ID must be a number');
-  }
-
-  return numId;
-}
-
-/**
  * Create a manifest section representing an array of FileResources
  */
 function toManifestSection(resources: FileResource[]) {
@@ -370,21 +360,6 @@ async function putResource(
     throw new Error(`Error putting ${type} ${id}: ${response.statusText}`);
   }
   return response.json<ResponseResource>();
-}
-
-/**
- * Encode a JS object to x-www-form-urlencoded format
- */
-function simpleEncode(value: any, key?: string, list?: string[]) {
-  list = list || [];
-  if (typeof value === 'object') {
-    for (let k in value) {
-      simpleEncode(value[k], key ? `${key}[${k}]` : k, list);
-    }
-  } else {
-    list.push(`${key}=${encodeURIComponent(value)}`);
-  }
-  return list.join('&');
 }
 
 /**

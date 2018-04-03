@@ -6,6 +6,7 @@ import initSync from './sync';
 import initLog from './log';
 import initList from './list';
 import initInfo from './info';
+import initRun from './run';
 
 require('dotenv-safe').config();
 
@@ -20,6 +21,7 @@ initSync(context);
 initLog(context);
 initList(context);
 initInfo(context);
+initRun(context);
 
 program.parse(process.argv);
 

@@ -1,5 +1,5 @@
 import * as WebSocket from 'ws';
-import { Context, die } from './common';
+import { Context, die, validateId } from './common';
 import { XmlEntities } from 'html-entities';
 
 // Setup cli ------------------------------------------------------------------
@@ -63,17 +63,6 @@ function validateType(type?: string) {
     return 'dev';
   }
   die('Type should be "app" or "dev"');
-}
-
-function validateId(value?: string) {
-  if (value == null) {
-    return value;
-  }
-  const id = Number(value);
-  if (isNaN(id)) {
-    die('ID must be a number');
-  }
-  return id;
 }
 
 function validateName(name?: string) {

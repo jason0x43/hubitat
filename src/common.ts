@@ -32,26 +32,6 @@ export function createLogger(program: CommanderStatic): Logger {
 }
 
 /**
- * Verify that a type variable is a ResourceType
- */
-export function validateType(type: string): ResourceType {
-  if (/apps?/.test(type)) {
-    return 'app';
-  }
-  if (/drivers?/.test(type)) {
-    return 'driver';
-  }
-  if (/devices?/.test(type)) {
-    return 'device';
-  }
-
-  die(`Invalid type "${type}"`);
-  return <ResourceType>'';
-}
-
-export type ResourceType = 'driver' | 'app' | 'device';
-
-/**
  * Get a resource list from Hubitat
  */
 export async function getResources(
@@ -85,6 +65,21 @@ export async function getResources(
 }
 
 /**
+ * Encode a JS object to x-www-form-urlencoded format
+ */
+export function simpleEncode(value: any, key?: string, list?: string[]) {
+  list = list || [];
+  if (typeof value === 'object') {
+    for (let k in value) {
+      simpleEncode(value[k], key ? `${key}[${k}]` : k, list);
+    }
+  } else {
+    list.push(`${key}=${encodeURIComponent(value)}`);
+  }
+  return list.join('&');
+}
+
+/**
  * Trim whitespace from either end of a string
  */
 export function trim(str?: string) {
@@ -92,6 +87,38 @@ export function trim(str?: string) {
     return str;
   }
   return str.replace(/^\s+/, '').replace(/\s+$/, '');
+}
+
+/**
+ * Validate an ID argument
+ */
+export function validateId(value?: string) {
+  if (value == null) {
+    return value;
+  }
+  const id = Number(value);
+  if (isNaN(id)) {
+    die('ID must be a number');
+  }
+  return id;
+}
+
+/**
+ * Verify that a type variable is a ResourceType
+ */
+export function validateType(type: string): ResourceType {
+  if (/apps?/.test(type)) {
+    return 'app';
+  }
+  if (/drivers?/.test(type)) {
+    return 'driver';
+  }
+  if (/devices?/.test(type)) {
+    return 'device';
+  }
+
+  die(`Invalid type "${type}"`);
+  return <ResourceType>'';
 }
 
 export interface Logger {
@@ -114,6 +141,8 @@ export interface DeviceResource extends Resource {
 }
 
 export type SourceType = 'System' | 'User';
+
+export type ResourceType = 'driver' | 'app' | 'device';
 
 function processCodeRow(
   $: CheerioStatic,
