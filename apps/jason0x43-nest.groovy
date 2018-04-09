@@ -3,6 +3,25 @@
  *
  * Author: Jason Cheatham
  * Date: 2018-04-08
+ *
+ * To use this app you first need to create an OAuth client on
+ * https://developers.nest.com.  The properties should look like:
+ *
+ *   Client name: whatever you want
+ *   Description: again, whatever you want
+ *   Categories: "home automation" seems reasonable
+ *   Users: "Individual"
+ *   Support URL: whatever you want
+ *   Default OAuth redirect URI: leave this blank
+ *   Additional OAuth redirect URIs: leave these blank
+ *   Permissions: Thermostat read/write -- Nest will make you type a
+ *     description for the permission; something like "<your app name> needs to
+ *     read and write the state of your Nest" will work.
+ *
+ * Once you have the OAuth client, install this app and enter the 'Client ID'
+ * and 'Client Secret' values from your Nest OAuth client in the this app's
+ * inputs, then follow the instructions this app shows you to finish setting it
+ * up.
  */
 
 definition(
