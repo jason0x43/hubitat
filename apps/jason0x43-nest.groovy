@@ -38,6 +38,7 @@ preferences {
 	page(name: 'mainPage')
 	page(name: 'authStartPage')
 	page(name: 'authFinishPage')
+	page(name: 'deauthorizePage')
 }
 
 def mainPage() {
@@ -81,7 +82,27 @@ def mainPage() {
 					'location settings automatically. Please update your Hub settings ' +
 					'to change the units used.' +
 					"\n\nThe current value is ${getTemperatureScale()}."
+
+				href(
+					'deauthorizePage',
+					title: 'Log out',
+					description: "Log out of Nest. You'll need to login again afterwards."
+				)
 			}
+		}
+	}
+}
+
+def deauthorizePage() {
+	disconnect()
+
+	return dynamicPage(
+		name: 'deauthorizePage',
+		title: 'Log out',
+		nextPage: 'mainPage'
+	) {
+		section() {
+			paragraph 'You have successfully logged out.'
 		}
 	}
 }
@@ -119,7 +140,7 @@ def authFinishPage() {
 	def installable;
 
 	try {
-		httpPostJson(
+		httpPost(
 			uri: "https://api.home.nest.com/oauth2/access_token",
 			body: [
 				grant_type: 'authorization_code',
@@ -136,6 +157,7 @@ def authFinishPage() {
 		status = 'Nest was successfully authorized'
 		installable = true
 	} catch (error) {
+		log.error error
 		status = 'There was a problem authorizing your Nest'
 		installable = false
 	}
@@ -296,15 +318,6 @@ private disconnect() {
 
 	state.connected = 'lost'
 	state.accessToken = null
-
-	// Notify each child that we lost so it gets logged
-	// def d = getChildDevices()
-	// d?.each { oneChild ->
-	// }
-
-	// unschedule('pollScheduled')
-	// unschedule('scheduleWatchdog')
-	// runEvery3Hours('notifyApiLost')
 }
 
 private isConnected() {
@@ -316,7 +329,6 @@ private isConnected() {
 
 private connected() {
 	state.connected = 'full'
-	// unschedule("notifyApiLost")
 	state.reAttemptPoll = 0
 }
 
