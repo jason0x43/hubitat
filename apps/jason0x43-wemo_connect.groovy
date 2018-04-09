@@ -90,7 +90,6 @@ def mainPage() {
 			)
 		}
 	}
-
 }
 
 def wemoWatchdog() {
@@ -321,35 +320,6 @@ def wemoWatchdog() {
 	}
 }
 
-private anythingSet() {
-	for (name in [
-		'motion',
-		'contact',
-		'contactClosed',
-		'acceleration',
-		'mySwitch',
-		'mySwitchOff',
-		'arrivalPresence',
-		'departurePresence',
-		'smoke',
-		'water',
-		'temperature',
-		'signalStrength',
-		'powerMeter',
-		'energyMeter',
-		'button1',
-		'timeOfDay',
-		'triggerModes',
-		'timeOfDay'
-	]) {
-		if (settings[name]) {
-			return true
-		}
-	}
-
-	return false
-}
-
 def devicesDiscovered() {
 	log.debug 'Getting discovered devices'
 	def devices = getWemoDevices().findAll { it?.value?.verified == true }
@@ -494,7 +464,7 @@ def addDevices() {
 					namespace,
 					name,
 					selectedDevice.value.mac,
-					selectedDevice?.value.hub,
+					selectedDevice.value.hub,
 					[ 
 						'label':  selectedDevice?.value?.name ?: 'Wemo Device',
 						'data': [
@@ -677,6 +647,41 @@ def delayPoll() {
 	runIn(5, 'pollChildren')
 }
 
+def handleLocationEvent(event) {
+	log.debug "Got location event: " + event.description
+}
+
+def handleSetupXml(response) {
+	def body = response.xml
+	log.trace 'handling friendly name: ' + body.device.friendlyName
+
+	if (
+		body?.device?.deviceType?.text().startsWith(
+			'urn:Belkin:device:controllee:1'
+		) ||  body?.device?.deviceType?.text().startsWith(
+			'urn:Belkin:device:insight:1'
+		) || body?.device?.deviceType?.text().startsWith(
+			'urn:Belkin:device:sensor'
+		) || body?.device?.deviceType?.text().startsWith(
+			'urn:Belkin:device:lightswitch'
+		)
+	) {
+		def devices = getWemoDevices()
+		def wemoDevice = devices.find {
+			it?.key?.contains(body?.device?.UDN?.text())
+		}
+
+		if (wemoDevice) {
+			wemoDevice.value << [
+				name: body?.device?.friendlyName?.text(),
+				verified: true
+			]
+		} else {
+			log.error "/setup.xml returned a wemo device that didn't exist"
+		}
+	}
+}
+
 private scheduleActions() {
 	log.trace 'Scheduling actions'
 	def minutes = Math.max(settings.interval.toInteger(),1)
@@ -723,35 +728,33 @@ private getFriendlyName(deviceNetworkId) {
 	)
 }
 
-def handleSetupXml(response) {
-	def body = response.xml
-	log.trace 'handling friendly name: ' + body.device.friendlyName
-
-	if (
-		body?.device?.deviceType?.text().startsWith(
-			'urn:Belkin:device:controllee:1'
-		) ||  body?.device?.deviceType?.text().startsWith(
-			'urn:Belkin:device:insight:1'
-		) || body?.device?.deviceType?.text().startsWith(
-			'urn:Belkin:device:sensor'
-		) || body?.device?.deviceType?.text().startsWith(
-			'urn:Belkin:device:lightswitch'
-		)
-	) {
-		def devices = getWemoDevices()
-		def wemoDevice = devices.find {
-			it?.key?.contains(body?.device?.UDN?.text())
-		}
-
-		if (wemoDevice) {
-			wemoDevice.value << [
-				name: body?.device?.friendlyName?.text(),
-				verified: true
-			]
-		} else {
-			log.error "/setup.xml returned a wemo device that didn't exist"
+private anythingSet() {
+	for (name in [
+		'motion',
+		'contact',
+		'contactClosed',
+		'acceleration',
+		'mySwitch',
+		'mySwitchOff',
+		'arrivalPresence',
+		'departurePresence',
+		'smoke',
+		'water',
+		'temperature',
+		'signalStrength',
+		'powerMeter',
+		'energyMeter',
+		'button1',
+		'timeOfDay',
+		'triggerModes',
+		'timeOfDay'
+	]) {
+		if (settings[name]) {
+			return true
 		}
 	}
+
+	return false
 }
 
 private getHostAddress(d) {
