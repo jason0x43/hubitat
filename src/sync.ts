@@ -251,7 +251,7 @@ async function updateRemoteResource(
     return false;
   }
 
-  console.log(`Pushing ${filename}...`);
+  console.log(`Pushing ${type} ${filename}...`);
   const res = await putResource(type, id, localRes.version, source);
   if (res.status === 'error') {
     console.error(
