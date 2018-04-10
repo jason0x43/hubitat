@@ -137,36 +137,42 @@ def subscribe() {
 	log.trace "Callback to ${callback}"
 	log.trace "Device MAC is ${device.deviceNetworkId}"
 
-	new hubitat.device.HubAction("""SUBSCRIBE /upnp/event/basicevent1 HTTP/1.1
-HOST: ${getHostAddress()}
-CALLBACK: <http://${callback}>
-NT: upnp:event
-TIMEOUT: Second-${60 * (parent.interval?:5)}
-
-
-""", hubitat.device.Protocol.LAN)
+	new hubitat.device.HubAction(
+		method: 'SUBSCRIBE',
+		path: '/upnp/event/basicevent1',
+		headers: [
+			HOST: getHostAddress(),
+			CALLBACK: "<http://${callback}>",
+			NT: 'upnp:event',
+			TIMEOUT: "Second-${60 * (parent.interval ?: 5)}"
+		]
+	)
 }
 
 def unsubscribe() {
 	log.debug 'Executing unsubscribe()'
-	new hubitat.device.HubAction("""UNSUBSCRIBE /upnp/event/basicevent1 HTTP/1.1
-HOST: ${getHostAddress()}
-SID: uuid:${getDeviceDataByName('subscriptionId')}
-
-
-""", hubitat.device.Protocol.LAN)
+	new hubitat.device.HubAction(
+		method: 'UNSUBSCRIBE',
+		path: '/upnp/event/basicevent1',
+		headers: [
+			HOST: getHostAddress(),
+			SID: "uuid:${getDeviceDataByName('subscriptionId')}"
+		]
+	)
 }
 
 def resubscribe() {
 	log.debug 'Executing "resubscribe()"'
 	def sid = getDeviceDataByName('subscriptionId')
-	new hubitat.device.HubAction("""SUBSCRIBE /upnp/event/basicevent1 HTTP/1.1
-HOST: ${getHostAddress()}
-SID: uuid:${sid}
-TIMEOUT: Second-300
-
-
-""", hubitat.device.Protocol.LAN)
+	new hubitat.device.HubAction(
+		method: 'SUBSCRIBE',
+		path: '/upnp/event/basicevent1',
+		headers: [
+			HOST: getHostAddress(),
+			SID: "uuid:${sid}",
+			TIMEOUT: "Second-${60 * (parent.interval ?: 5)}"
+		]
+	)
 }
 
 def sync(ip, port) {
