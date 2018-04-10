@@ -3,6 +3,7 @@ import {
   validateType,
   ResourceType,
   Resource,
+  InstalledResource,
   DeviceResource,
   CodeResource,
   getResources,
@@ -28,18 +29,23 @@ export default function init(context: Context) {
       const rtype = validateType(type);
       const t = new Table();
 
-      if (rtype == 'driver') {
-        const drivers = await listResources('driver');
+      if (rtype === 'driver') {
+        const drivers = await listResources(rtype);
         drivers.forEach(driver => {
-          addCodeRow(t, driver, type ? undefined : 'driver');
+          addCodeRow(t, driver, type ? undefined : rtype);
         });
-      } else if (rtype == 'app') {
-        const apps = await listResources('app');
+      } else if (rtype === 'app') {
+        const apps = await listResources(rtype);
         apps.forEach(app => {
-          addCodeRow(t, app, type ? undefined : 'app');
+          addCodeRow(t, app, type ? undefined : rtype);
+        });
+      } else if (rtype === 'installedapp') {
+        const apps = await listResources(rtype);
+        apps.forEach(app => {
+          addInstalledRow(t, app);
         });
       } else {
-        const devices = await listResources('device');
+        const devices = await listResources(rtype);
         devices.forEach(dev => {
           addDeviceRow(t, dev);
         });
@@ -61,6 +67,13 @@ export default function init(context: Context) {
     t.newRow();
   }
 
+  function addInstalledRow(t: typeof Table, resource: InstalledResource) {
+    t.cell('id', resource.id, Table.number());
+    t.cell('name', resource.name, Table.string());
+    t.cell('app', resource.app, Table.string());
+    t.newRow();
+  }
+
   function addDeviceRow(t: typeof Table, resource: DeviceResource) {
     t.cell('id', resource.id, Table.number());
     t.cell('name', resource.name, Table.string());
@@ -76,8 +89,9 @@ export default function init(context: Context) {
  */
 async function listResources(resource: 'device'): Promise<DeviceResource[]>;
 async function listResources(
-  resource: 'app' | 'driver'
-): Promise<CodeResource[]>;
+  resource: 'installedapp'
+): Promise<InstalledResource[]>;
+async function listResources(resource: ResourceType): Promise<CodeResource[]>;
 async function listResources(resource: ResourceType): Promise<Resource[]> {
   const resources = await getResources(hubitatHost, resource);
   return resources;

@@ -56,12 +56,15 @@ export async function getResources(
   const selector = tableSelectors[type];
   const processRow = rowProcessors[type];
 
-  const rows = $(selector).toArray();
-  return Promise.all(
-    rows.map<Promise<Resource>>(async elem => {
-      return processRow($, $(elem), type);
-    })
-  );
+  return $(selector)
+    .toArray()
+    .reduce(
+      (allResources, elem) => [
+        ...allResources,
+        ...processRow($, $(elem), type)
+      ],
+      <Resource[]>[]
+    );
 }
 
 /**
@@ -116,6 +119,9 @@ export function validateType(type: string): ResourceType {
   if (/devices?/.test(type)) {
     return 'device';
   }
+  if (/installed(app)?/.test(type)) {
+    return 'installedapp';
+  }
 
   die(`Invalid type "${type}"`);
   return <ResourceType>'';
@@ -126,13 +132,17 @@ export interface Logger {
 }
 
 export interface Resource {
-  id: string;
+  id: number;
   name: string;
   type: string;
 }
 
 export interface CodeResource extends Resource {
   namespace: string;
+}
+
+export interface InstalledResource extends Resource {
+  app: string;
 }
 
 export interface DeviceResource extends Resource {
@@ -142,61 +152,88 @@ export interface DeviceResource extends Resource {
 
 export type SourceType = 'System' | 'User';
 
-export type ResourceType = 'driver' | 'app' | 'device';
+export type ResourceType = 'driver' | 'app' | 'device' | 'installedapp';
 
 function processCodeRow(
   $: CheerioStatic,
   row: Cheerio,
   type: ResourceType
-): CodeResource {
-  const id = <string>row.data(`${type}-id`);
-  if (!id) {
-    throw new Error(`No ID in row ${row.text()}`);
-  }
-
+): CodeResource[] {
+  const id = Number(row.data(`${type}-id`));
   const link = $(row.find('td')[0]).find('a');
   const text = type === 'app' ? link.attr('title') : link.text();
   const [namespace, name] = text.split(':').map(trim);
 
-  return {
-    id,
-    type,
-    name: name!,
-    namespace: namespace!
-  };
+  return [
+    {
+      id,
+      type,
+      name: name!,
+      namespace: namespace!
+    }
+  ];
 }
 
 function processDeviceRow(
   $: CheerioStatic,
   row: Cheerio,
   type: ResourceType
-): DeviceResource {
-  const id = <string>row.data(`${type}-id`);
-  if (!id) {
-    throw new Error(`No ID in row ${row.text()}`);
-  }
-
+): DeviceResource[] {
+  const id = Number(row.data(`${type}-id`));
   const link = $(row.find('td')[0]).find('a');
   const driver = <SourceType>$(row.find('td')[1]).text();
   const source = <SourceType>$(row.find('td')[2]).text();
   const name = link.text();
 
-  return {
-    id,
-    driver,
-    type,
-    source,
-    name: name
-  };
+  return [
+    {
+      id,
+      driver,
+      type,
+      source,
+      name: name
+    }
+  ];
+}
+
+function processInstalledRow(
+  $: CheerioStatic,
+  row: Cheerio,
+  type: ResourceType
+): InstalledResource[] {
+  const apps: InstalledResource[] = [];
+
+  const nameCell = $(row.find('td')[0]);
+  const names = nameCell.find('a:first-child');
+  const typeCell = $(row.find('td')[1]);
+  const types = typeCell.find('div,li');
+  names.each((i, link) => {
+    const name = $(link)
+      .text()
+      .trim();
+    const id = Number(
+      $(link)
+        .attr('href')
+        .split('/')[3]
+    );
+    const app = $(types[i])
+      .text()
+      .trim();
+    apps.push({ name, id, app, type });
+  });
+
+  return apps;
 }
 
 const tableSelectors = {
   app: '#hubitapps-table tbody .app-row',
+  installedapp: '#app-table tbody .app-row',
   driver: '#devicetype-table tbody .device-row',
   device: '#device-table tbody .device-row'
 };
 const rowProcessors = {
   app: processCodeRow,
   driver: processCodeRow,
-  device: processDeviceRow
+  device: processDeviceRow,
+  installedapp: processInstalledRow
 };
