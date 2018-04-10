@@ -227,11 +227,11 @@ def nestGet(path) {
 	log.trace "Getting ${path} from Nest"
 
 	httpGet(
-		uri: 'https://developer-api.nest.com',
+		uri: "https://developer-api.nest.com?auth=${state.accessToken}",
 		path: path,
-		headers: [
-			Authorization: "Bearer ${state.accessToken}"
-		]
+		// headers: [
+		// 	Authorization: "Bearer ${state.accessToken}"
+		// ]
 	) { resp ->
 		responseData = resp.data
 	}
@@ -248,20 +248,20 @@ def nestPut(path, data) {
 	def json = new groovy.json.JsonBuilder(data).toString()
 
 	httpPutJson(
-		uri: 'https://developer-api.nest.com',
+		uri: "https://developer-api.nest.com?auth=${state.accessToken}",
 		path: path,
 		body: json,
-		headers: [
-			Authorization: "Bearer ${state.accessToken}"
-		]
+		// headers: [
+		// 	Authorization: "Bearer ${state.accessToken}"
+		// ]
 	) { resp ->
 		if (resp.status == 307) {
 			httpPutJson(
-				uri: resp.headers.Location,
+				uri: "${resp.headers.Location}?auth=${state.accessToken}",
 				body: json,
-				headers: [
-					Authorization: "Bearer ${state.accessToken}"
-				]
+				// headers: [
+				// 	Authorization: "Bearer ${state.accessToken}"
+				// ]
 			) { rsp ->
 				responseData = rsp.data
 			}
@@ -276,13 +276,6 @@ def nestPut(path, data) {
 private getThermostats() {
 	log.debug 'Getting list of Nest thermostats'
 
-	def deviceListParams = [
-		uri: 'https://developer-api.nest.com',
-		path: '/',
-		headers: [
-			Authorization: "Bearer ${state.accessToken}"
-		]
-	]
 	def names = [:]
 
 	try {
