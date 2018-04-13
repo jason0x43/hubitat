@@ -2,7 +2,7 @@
  * A simple Nest thermostat driver
  *
  * Author: Jason Cheatham
- * Date: 2018-04-13
+ * Last updated: 2018-04-13, 13:06 ET
  */
 
 metadata {
@@ -46,7 +46,7 @@ def auto() {
 def away() {
 	log.debug 'away()'
 	parent.setAway(true)
-	refresh([away: true, triesLeft: 3])
+	refresh(true)
 }
 
 def cool() {
@@ -93,7 +93,7 @@ def heat() {
 def home() {
 	log.debug 'home()'
 	parent.setAway(false)
-	refresh([away: false, triesLeft: 3])
+	refresh(false)
 }
 
 def off() {
@@ -170,9 +170,13 @@ def parse(description) {
 	log.debug 'Received event: ' + description
 }
 
-def refresh(args) {
+def refresh(isAway) {
 	log.debug 'Refreshing'
-	updateState(args)
+	if (isAway != null) {
+		updateState([away: isAway, triesLeft: 3])
+	} else {
+		updateState()
+	}
 }
 
 private nestPut(data) {
