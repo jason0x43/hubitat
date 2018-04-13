@@ -16,9 +16,14 @@ metadata {
 		command 'eco'
 		command 'sunblockOn'
 		command 'sunblockOff'
+		command 'away'
+		command 'home'
+		command 'setScale', ['enum']
 
+		attribute 'away', 'boolean'
 		attribute 'sunblockEnabled', 'boolean'
 		attribute 'sunblockActive', 'boolean'
+		attribute 'scale', 'enum', ['f', 'c']
 	}
 
 	preferences {	
@@ -35,31 +40,25 @@ metadata {
 def auto() {
 	log.debug 'auto()'
 	nestPut([hvac_mode: 'heat-cool'])
-	sendEvent(name: 'thermostatMode', value: 'heat-cool')
+	refresh()
 }
 
-def eco() {
-	log.debug 'eco()'
-	nestPut([hvac_mode: 'eco'])
-	sendEvent(name: 'thermostatMode', value: 'eco')
-}
-
-def sunblockOn() {
-	log.debug 'sunblockOn()'
-	nestPut([sunlight_correction_enabled: true])
-	sendEvent(name: 'sunblockEnabled', value: true)
-}
-
-def sunblockOff() {
-	log.debug 'sunblockOff()'
-	nestPut([sunlight_correction_enabled: false])
-	sendEvent(name: 'sunblockEnabled', value: false)
+def away() {
+	log.debug 'away()'
+	parent.setAway(true)
+	refresh([away: true, triesLeft: 3])
 }
 
 def cool() {
 	log.debug 'cool()'
 	nestPut([hvac_mode: 'cool'])
-	sendEvent(name: 'thermostatMode', value: 'cool')
+	refresh()
+}
+
+def eco() {
+	log.debug 'eco()'
+	nestPut([hvac_mode: 'eco'])
+	refresh()
 }
 
 def emergencyHeat() {
@@ -69,7 +68,7 @@ def emergencyHeat() {
 def fanAuto() {
 	log.debug 'fanAuto()'
 	nestPut([hvac_mode: 'heat'])
-	sendEvent(name: 'thermostatMode', value: 'heat')
+	refresh()
 }
 
 def fanCirculate() {
@@ -78,7 +77,7 @@ def fanCirculate() {
 		fan_timer_duration: 15,
 		fan_timer_active: true
 	])
-	sendEvent(name: 'thermostatFanMode', value: 'circulate')
+	refresh()
 }
 
 def fanOn() {
@@ -88,13 +87,19 @@ def fanOn() {
 def heat() {
 	log.debug 'heat()'
 	nestPut([hvac_mode: 'heat'])
-	sendEvent(name: 'thermostatMode', value: 'heat')
+	refresh()
+}
+
+def home() {
+	log.debug 'home()'
+	parent.setAway(false)
+	refresh([away: false, triesLeft: 3])
 }
 
 def off() {
 	log.debug 'off()'
 	nestPut([hvac_mode: 'off'])
-	sendEvent(name: 'thermostatMode', value: 'off')
+	refresh()
 }
 
 def setCoolingSetpoint(target) {
@@ -107,6 +112,18 @@ def setHeatingSetpoint(target) {
 	setTargetTemp(target, 'heat')
 }
 
+def setScale(scale) {
+	log.debug "setScale(${scale})"
+	scale = scale ? scale.toLowerCase() : null
+	if (scale != 'f' && scale != 'c') {
+		log.error "Invalid scale ${scale}"
+		return
+	}
+
+	nestPut([temperature_scale: scale])
+	refresh()
+}
+
 def setSchedule(schedule) {
 	log.debug "setSchedule(${schedule})"
 }
@@ -117,6 +134,18 @@ def setThermostatFanMode(mode) {
 
 def setThermostatMode(mode) {
 	log.debug "setThermostatMode(${mode})"
+}
+
+def sunblockOff() {
+	log.debug 'sunblockOff()'
+	nestPut([sunlight_correction_enabled: false])
+	refresh()
+}
+
+def sunblockOn() {
+	log.debug 'sunblockOn()'
+	nestPut([sunlight_correction_enabled: true])
+	refresh()
 }
 
 def updated() {
@@ -141,11 +170,9 @@ def parse(description) {
 	log.debug 'Received event: ' + description
 }
 
-def refresh() {
+def refresh(args) {
 	log.debug 'Refreshing'
-	def id = getDataValue('nestId')
-	def data = parent.nestGet("/devices/thermostats/${id}")
-	updateState(data)
+	updateState(args)
 }
 
 private nestPut(data) {
@@ -163,25 +190,70 @@ private setTargetTemp(temp, heatOrCool) {
 	}
 
 	def value = temp.toInteger()
-	nestPut([target_temperature_f: value])
-	sendEvent(name: "${heatOrCool}ingSetpoint", value: value)
+	def scale = device.currentValue('scale')
+
+	if (mode == 'heat-cool') {
+		if (heatOrCool == 'cool') {
+			nestPut(["target_temperature_high_${scale}": value])
+		} else {
+			nestPut(["target_temperature_low_${scale}": value])
+		}
+	} else {
+		nestPut(["target_temperature_${scale}": value])
+	}
+
+	refresh()
 }
 
-private updateState(data) {
-	log.trace 'Updating state with ' + data
+private updateState(args) {
+	def id = getDataValue('nestId')
+	def data = parent.nestGet("/devices/thermostats/${id}")
+
+	// If the thermostat mode doesn't agree with the 'away' state, wait a few
+	// seconds and update again
+	if (
+		args &&
+		(
+			args.away == true && data.hvac_mode != 'eco' ||
+			args.away == false && data.hvac_mode == 'eco'
+		) &&
+		args.triesLeft > 0
+	) {
+		log.trace "Device hasn't updated for away yet, retrying"
+		runIn(3, 'updateState', [data: [
+			away: args.away,
+			triesLeft: args.triesLeft - 1
+		]])
+		return
+	}
+
+	def scale = data.temperature_scale.toLowerCase()
+	def away = parent.isAway()
+
+	sendEvent(name: 'away', value: away)
 	sendEvent(name: 'thermostatMode', value: data.hvac_mode)
 	sendEvent(name: 'humidity', value: data.humidity)
 	sendEvent(
 		name: 'thermostatFanMode',
 		value: data.fan_timer_active ? 'circulate' : 'auto'
 	)
-
+	sendEvent(name: 'scale', value: scale)
 	sendEvent(name: 'sunblockEnabled', value: data.sunlight_correction_enabled)
 	sendEvent(name: 'sunblockActive', value: data.sunlight_correction_active)
 
+	log.trace "thermostatMode: ${data.hvac_mode}"
+
 	if (data.hvac_mode == 'heat') {
-		sendEvent(name: 'heatingSetpoint', value: data.target_temperature_f)
+		log.trace 'setting heating setpoint to ' + data["target_temperature_${scale}"]
+		sendEvent(name: 'heatingSetpoint', value: data["target_temperature_${scale}"])
 	} else if (data.hvac_mode == 'cool') {
-		sendEvent(name: 'coolingSetpoint', value: data.target_temperature_f)
+		log.trace 'setting cooling setpoint to ' + data["target_temperature_${scale}"]
+		sendEvent(name: 'coolingSetpoint', value: data["target_temperature_${scale}"])
+	} else if (data.hvac_mode == 'eco') {
+		sendEvent(name: 'heatingSetpoint', value: data["eco_temperature_low_${scale}"])
+		sendEvent(name: 'coolingSetpoint', value: data["eco_temperature_high_${scale}"])
+	} else if (data.hvac_mode == 'heat-cool') {
+		sendEvent(name: 'heatingSetpoint', value: data["target_temperature_low_${scale}"])
+		sendEvent(name: 'coolingSetpoint', value: data["target_temperature_high_${scale}"])
 	}
 }

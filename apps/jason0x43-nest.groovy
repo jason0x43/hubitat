@@ -14,9 +14,11 @@
  *   Support URL: whatever you want
  *   Default OAuth redirect URI: leave this blank
  *   Additional OAuth redirect URIs: leave these blank
- *   Permissions: Thermostat read/write -- Nest will make you type a
- *     description for the permission; something like "<your app name> needs to
- *     read and write the state of your Nest" will work.
+ *   Permissions:
+ *     - Thermostat read/write -- Nest will make you type a
+ *       description for the permission; something like "<your app name> needs to
+ *       read and write the state of your Nest" will work.
+ *     - Other Permissions - Away read/write (same caveat as above)
  *
  * Once you have the OAuth client, install this app and enter the 'Client ID'
  * and 'Client Secret' values from your Nest OAuth client in the this app's
@@ -64,6 +66,21 @@ def mainPage() {
 			}
 
 			if (isAuthorized()) {
+				def structures = getStructures()
+
+				input(
+					name: 'structure',
+					title: 'Select which structure to manage',
+					type: 'enum',
+					required: false,
+					multiple: false,
+					description: 'Tap to choose',
+					options: structures,
+					submitOnChange: true
+				)
+			}
+
+			if (isAuthorized() && settings.structure) {
 				def thermostats = getThermostats()
 
 				input(
@@ -76,17 +93,14 @@ def mainPage() {
 					options: thermostats,
 					submitOnChange: true
 				)
+			}
 
-				paragraph 'NOTE:' +
-					'\n\nThe temperature units (F or C) are determined by your ' +
-					'location settings automatically. Please update your Hub settings ' +
-					'to change the units used.' +
-					"\n\nThe current value is ${getTemperatureScale()}."
-
+			if (isAuthorized()) {
 				href(
 					'deauthorizePage',
 					title: 'Log out',
-					description: "Log out of Nest. You'll need to login again afterwards."
+					description: "Log out of Nest. You'll need to login again " +
+						'to control your Nest devices.'
 				)
 			}
 		}
@@ -150,8 +164,8 @@ def authFinishPage() {
 			]
 		) { resp ->
 			log.debug "oauthData: ${resp.data}"
-			state.accessToken = resp.data['access_token']
-			state.accessTokenExpires = now() + resp.data['expires_in']
+			state.accessToken = resp.data.access_token
+			state.accessTokenExpires = now() + resp.data.expires_in
 		}
 
 		status = 'Nest was successfully authorized'
@@ -218,6 +232,19 @@ def initialize() {
 	}
 }
 
+def isAway() {
+	def data = nestGet("/structures/${settings.structure}")
+	return data.away == 'away'
+}
+
+def setAway(isAway) {
+	if (isAway != true && isAway != false) {
+		log.error "Invalid away value ${isAway}"
+		return
+	}
+	nestPut("/structures/${settings.structure}", [away: isAway ? 'away' : 'home'])
+}
+
 /**
  * Called by child apps to get data from Nest
  */
@@ -243,24 +270,28 @@ def nestGet(path) {
  * Called by child apps to set data to Nest
  */
 def nestPut(path, data) {
-	log.trace "Putting ${data} to ${path}"
 	def responseData
 	def json = new groovy.json.JsonBuilder(data).toString()
+	def token = state.accessToken
+
+	log.trace "Putting ${json} to ${path}"
 
 	httpPutJson(
 		uri: 'https://developer-api.nest.com',
 		path: path,
 		body: json,
 		headers: [
-			Authorization: "Bearer ${state.accessToken}"
+			Authorization: "Bearer ${token}"
 		]
 	) { resp ->
 		if (resp.status == 307) {
+			def location = resp.headers.Location
+			log.trace "Redirected to ${location}"
 			httpPutJson(
-				uri: resp.headers.Location,
+				uri: location,
 				body: json,
 				headers: [
-					Authorization: "Bearer ${state.accessToken}"
+					Authorization: "Bearer ${token}"
 				]
 			) { rsp ->
 				responseData = rsp.data
@@ -273,16 +304,35 @@ def nestPut(path, data) {
 	return responseData
 }
 
+private getStructures() {
+	log.debug 'Getting list of Nest structures'
+
+	def names = [:]
+
+	try {
+		def data = nestGet('/')
+		log.debug "Got Nest response: ${data}"
+
+		def structures = data.structures;
+		state.structureData = structures;
+		state.numStructures = structures.size()
+
+		log.trace "Found ${state.numStructures} structures"
+
+		structures.each { id, st ->
+			names[id] = st.name
+		}
+	} catch(Exception e) {
+		log.error 'Error getting nests: ' + e
+	}
+
+	state.structureNames = names
+	return names.sort { it.value }
+}
+
 private getThermostats() {
 	log.debug 'Getting list of Nest thermostats'
 
-	def deviceListParams = [
-		uri: 'https://developer-api.nest.com',
-		path: '/',
-		headers: [
-			Authorization: "Bearer ${state.accessToken}"
-		]
-	]
 	def names = [:]
 
 	try {
@@ -294,8 +344,11 @@ private getThermostats() {
 		state.numThermostats = devices.size()
 
 		log.trace "Found ${state.numThermostats} thermostats"
+		def structureId = settings.structure
 
-		devices.each { id, therm ->
+		devices.findAll { id, therm ->
+			therm.structure_id == structureId
+		}.each  { id, therm ->
 			names[id] = therm.name
 		}
 	} catch(Exception e) {

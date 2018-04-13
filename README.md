@@ -5,6 +5,12 @@ onto my Hubitat, along with a script to interact with the Hubitat. Some of the
 apps and drivers are my own, some are from other sources, and a few are ones
 from other sources that I cleaned up and/or modified.
 
+## Nest Integration
+
+This repo contains an integration app and driver to control Nest thermostats.
+See the [Nest Integration app source](./apps/jason0x43-nest.groovy) for setup
+instructions.
+
 ## hubitat script
 
 The `hubitat` application is TypeScript application that allows some degree of
