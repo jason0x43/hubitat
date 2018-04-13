@@ -2,7 +2,7 @@
  * Manager app for Nest thermostat
  *
  * Author: Jason Cheatham
- * Date: 2018-04-08
+ * Date: 2018-04-13
  *
  * To use this app you first need to create an OAuth client on
  * https://developers.nest.com.  The properties should look like:
