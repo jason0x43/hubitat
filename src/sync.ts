@@ -263,6 +263,7 @@ async function updateRemoteResource(
   const newResource = {
     hash,
     filename,
+    id: res.id,
     version: res.version
   };
   localManifest[type][res.id] = toManifestEntry(newResource);
@@ -299,6 +300,7 @@ function toManifestSection(resources: FileResource[]) {
 function toManifestEntry(resource: ManifestEntry) {
   return {
     filename: resource.filename,
+    id: resource.id,
     version: resource.version,
     hash: resource.hash
   };
@@ -421,6 +423,7 @@ interface ManifestResources {
 }
 
 interface ManifestEntry {
+  id: number;
   filename: string;
   version: number;
   hash: string;
