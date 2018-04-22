@@ -235,38 +235,43 @@ async function updateRemoteResource(
   const localRes = localManifest[type][id];
   const remoteRes = remoteManifest[type][id];
   const filename = localRes.filename;
-  const source = readFileSync(join(resourceDirs[type], filename), {
-    encoding: 'utf8'
-  });
+  try {
+    const source = readFileSync(join(resourceDirs[type], filename), {
+      encoding: 'utf8'
+    });
 
-  const hash = hashSource(source);
-  if (hash === localRes.hash) {
-    // File hasn't changed -- don't push
-    log(`${filename} hasn't changed; not pushing`);
-    return true;
+    const hash = hashSource(source);
+    if (hash === localRes.hash) {
+      // File hasn't changed -- don't push
+      log(`${filename} hasn't changed; not pushing`);
+      return true;
+    }
+
+    if (localRes.version !== remoteRes.version) {
+      console.error(`${type} ${filename} is out of date; pull first`);
+      return false;
+    }
+
+    console.log(`Pushing ${type} ${filename}...`);
+    const res = await putResource(type, id, localRes.version, source);
+    if (res.status === 'error') {
+      console.error(
+        `Error pushing ${type} ${filename}: ${trim(res.errorMessage)}`
+      );
+      return false;
+    }
+
+    const newResource = {
+      hash,
+      filename,
+      id: res.id,
+      version: res.version
+    };
+    localManifest[type][res.id] = toManifestEntry(newResource);
+  } catch (error) {
+    console.log(`No local script ${filename}, removing from manifest`);
+    delete localManifest[type][id];
   }
-
-  if (localRes.version !== remoteRes.version) {
-    console.error(`${type} ${filename} is out of date; pull first`);
-    return false;
-  }
-
-  console.log(`Pushing ${type} ${filename}...`);
-  const res = await putResource(type, id, localRes.version, source);
-  if (res.status === 'error') {
-    console.error(
-      `Error pushing ${type} ${filename}: ${trim(res.errorMessage)}`
-    );
-    return false;
-  }
-
-  const newResource = {
-    hash,
-    filename,
-    id: res.id,
-    version: res.version
-  };
-  localManifest[type][res.id] = toManifestEntry(newResource);
 
   return true;
 }
