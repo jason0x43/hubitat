@@ -20,6 +20,7 @@
     "easy-table": "~1.1.1",
     "html-entities": "~1.2.1",
     "node-fetch": "~2.1.2",
+    "source-map-support": "~0.5.4",
     "ws": "~5.1.0"
   },
   "devDependencies": {

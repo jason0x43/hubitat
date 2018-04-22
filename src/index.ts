@@ -8,6 +8,7 @@ import initList from './list';
 import initInfo from './info';
 import initRun from './run';
 
+require('source-map-support').install();
 require('dotenv-safe').config();
 
 program.description('Interact with hubitat').option('-v, --verbose');
