@@ -61,36 +61,55 @@ def updateColorTemp() {
     
     // Update color temp based on current time
     def times = getSunriseAndSunset(sunriseOffset: -60, sunsetOffset: -60)
+    def realTimes = getSunriseAndSunset(sunriseOffset: 0, sunsetOffset: 0)
     def now = new Date()
     def sunrise = times.sunrise
     def sunset = times.sunset
+    def realSunset = realTimes.sunset
 
     // This is an 'or' because after midnight sunset will switch
     // to the next day
-    if (now.after(sunset) || now.before(sunrise)) {
+    if (now.after(realSunset) || now.before(sunrise)) {
         // At night it's always 2200
         state.colorTemp = 2200;
     } else {
-        // During the day the temp starts out at 3200 and gradually moves
-        // down to 2200
-        def riseTime = sunrise.getTime()
-        def setTime = sunset.getTime()
-        def range = setTime - riseTime
+        def startTime
+        def endTime
+        def startTemp
+        def endTemp
+        
+        if (now.after(sunset)) {
+            // During the evening the temp 2700 and gradually moves down to
+            // 2200
+            startTime = sunset.getTime()
+            endTime = realSunset.getTime()
+            startTemp = 2700
+            endTemp = 2200
+        } else {
+            // During the day the temp starts out at 3200 and gradually moves
+            // down to 2700
+            startTime = sunrise.getTime()
+            endTime = sunset.getTime()
+            startTemp = 3200
+            endTemp = 2700
+        }
+
+        def range = endTime - startTime
         def nowTime = now.getTime()
         // minutes from sunrise to now
-        def delta = nowTime - riseTime
+        def delta = nowTime - startTime
         //log.trace "Delta: ${delta}"
         // percent progress
         def progress = delta / range;
         //log.trace "Progress: ${progress}"
 
-        state.colorTemp = (3200 - progress * 1000).toInteger()
+        state.colorTemp = (startTemp - progress * (startTemp - endTemp)).toInteger()
         log.debug "New colorTemp is ${state.colorTemp}"
     }
     
-    // Update the color temp of any lights that are curr ntly on
+    // Update the color temp of any lights that are currently on
     for (light in lights) {
-        if (light.latestValue('switch').toString() == 'on') {
+        if (light.currentSwitch == 'on') {
             light.setColorTemperature(state.colorTemp)
         }
     }
