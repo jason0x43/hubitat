@@ -92,6 +92,23 @@ export function trim(str?: string) {
   return str.replace(/^\s+/, '').replace(/\s+$/, '');
 }
 
+export type CodeResourceType = 'app' | 'driver';
+
+/**
+ * Validate a code type argument.
+ */
+export function validateCodeType(type: string): CodeResourceType {
+  if (/apps?/.test(type)) {
+    return 'app';
+  }
+  if (/drivers?/.test(type)) {
+    return 'driver';
+  }
+
+  die(`Invalid type "${type}"`);
+  return <CodeResourceType>'';
+}
+
 /**
  * Validate an ID argument
  */

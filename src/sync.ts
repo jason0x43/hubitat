@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join, relative } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { basename, join, relative } from 'path';
 import { createHash } from 'crypto';
 import { execSync } from 'child_process';
 import fetch from 'node-fetch';
@@ -21,6 +21,7 @@ const resourceDirs = {
   app: relative(process.cwd(), join(__dirname, '..', 'apps')),
   driver: relative(process.cwd(), join(__dirname, '..', 'drivers'))
 };
+const repoDir = '.repos';
 
 let program: CommanderStatic;
 let hubitatHost: string;
@@ -32,6 +33,38 @@ export default function init(context: Context) {
   program = context.program;
   hubitatHost = context.hubitatHost;
   log = createLogger(program);
+
+  // Install a script from a github repo
+  program
+    .command('install <type> <gitPath>')
+    .description('Install a resource from github')
+    .action(async (type, gitPath) => {
+      if (!/[^/]+\/[^/]+\/.*\.groovy$/.test(gitPath)) {
+        die('gitPath must have format org/repo/path/to/file.groovy');
+      }
+
+      const parts = gitPath.split('/');
+      const orgPath = join(repoDir, parts[0]);
+      mkdirp(orgPath);
+
+      const repoPath = join(orgPath, parts[1]);
+      if (!existsSync(repoPath)) {
+        const repo = parts.slice(0, 2).join('/');
+        execSync(`git clone https://github.com/${repo}`, { cwd: orgPath });
+      }
+
+      try {
+        const rtype = validateCodeType(type);
+        const localManifest = loadManifest();
+        const filename = join(repoDir, gitPath);
+
+        console.log(`Installing ${gitPath}...`);
+        await createRemoteResource(rtype!, filename, localManifest);
+        saveManifest(localManifest);
+      } catch (error) {
+        die(error);
+      }
+    });
 
   // Pull a specific resource from Hubitat
   program
@@ -154,6 +187,34 @@ export default function init(context: Context) {
 // Implementation -------------------------------------------------------------
 
 /**
+ * Update a remote resource. This should return a new version number which will
+ * be added to the manifest.
+ */
+async function createRemoteResource(
+  type: CodeResourceType,
+  filename: string,
+  localManifest: Manifest
+): Promise<boolean> {
+  const source = readFileSync(filename, {
+    encoding: 'utf8'
+  });
+
+  const hash = hashSource(source);
+  console.log(`Creating ${type} ${filename}...`);
+  const newId = await postResource(type, source);
+
+  const newResource = {
+    hash,
+    filename,
+    id: newId,
+    version: 1
+  };
+  localManifest[type][newId] = toManifestEntry(newResource);
+
+  return true;
+}
+
+/**
  * Get a manifest of resources available on the Hubitat
  */
 async function getRemoteManifest(type?: CodeResourceType): Promise<Manifest> {
@@ -192,8 +253,14 @@ async function updateLocalResource(
   remoteManifest: Manifest
 ): Promise<boolean> {
   const resource = await getResource(type, id);
-  const remoteRes = remoteManifest[type][resource.id];
   const localRes = localManifest[type][resource.id];
+
+  if (localRes.filename.indexOf(repoDir) === 0) {
+    console.log(`Skipping github resource ${basename(localRes.filename)}`);
+    return false;
+  }
+
+  const remoteRes = remoteManifest[type][resource.id];
   const filename = join(resourceDirs[type], remoteRes.filename);
 
   if (localRes) {
@@ -235,10 +302,21 @@ async function updateRemoteResource(
   const localRes = localManifest[type][id];
   const remoteRes = remoteManifest[type][id];
   const filename = localRes.filename;
+  let source: string;
+
   try {
-    const source = readFileSync(join(resourceDirs[type], filename), {
-      encoding: 'utf8'
-    });
+    if (filename.indexOf(repoDir) === 0) {
+      const repo = join(...filename.split('/').slice(0, 3));
+      console.log(`Updating github resource ${basename(filename)}`);
+      execSync('git pull', { cwd: repo });
+      source = readFileSync(filename, {
+        encoding: 'utf8'
+      });
+    } else {
+      source = readFileSync(join(resourceDirs[type], filename), {
+        encoding: 'utf8'
+      });
+    }
 
     const hash = hashSource(source);
     if (hash === localRes.hash) {
@@ -350,6 +428,26 @@ async function getResource(
 }
 
 /**
+ * Create a specific resource (driver or app)
+ */
+async function postResource(
+  type: ResourceType,
+  source: string
+): Promise<number> {
+  const response = await fetch(`http://${hubitatHost}/${type}/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: simpleEncode({ id: '', version: '', source })
+  });
+  if (response.status !== 200) {
+    throw new Error(`Error creating ${type}: ${response.statusText}`);
+  }
+
+  const location = response.url;
+  return Number(location.split('/').pop()!);
+}
+
+/**
  * Store a specific resource (driver or app)
  */
 async function putResource(
@@ -388,6 +486,20 @@ function loadManifest(): Manifest {
     app: {},
     driver: {}
   };
+}
+
+/**
+ * Make a directory and its parents
+ */
+function mkdirp(dir: string) {
+  const parts = dir.split('/');
+  let path = '.';
+  while (parts.length > 0) {
+    path = join(path, parts.shift()!);
+    if (!existsSync(path)) {
+      mkdirSync(path);
+    }
+  }
 }
 
 /**
