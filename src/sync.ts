@@ -312,6 +312,8 @@ async function updateRemoteResource(
       source = readFileSync(filename, {
         encoding: 'utf8'
       });
+      // The local version is irrelevant for repo-based resources
+      localRes.version = remoteRes.version;
     } else {
       source = readFileSync(join(resourceDirs[type], filename), {
         encoding: 'utf8'
@@ -333,6 +335,7 @@ async function updateRemoteResource(
     console.log(`Pushing ${type} ${filename}...`);
     const res = await putResource(type, id, localRes.version, source);
     if (res.status === 'error') {
+      console.log(res);
       console.error(
         `Error pushing ${type} ${filename}: ${trim(res.errorMessage)}`
       );
