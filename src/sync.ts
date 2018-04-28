@@ -1,10 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename, join, relative } from 'path';
 import { createHash } from 'crypto';
+import * as cheerio from 'cheerio';
 import { execSync } from 'child_process';
 import fetch from 'node-fetch';
 import {
   Context,
+  CodeResource,
   die,
   ResourceType,
   Logger,
@@ -36,30 +38,41 @@ export default function init(context: Context) {
 
   // Install a script from a github repo
   program
-    .command('install <type> <gitPath>')
-    .description('Install a resource from github')
-    .action(async (type, gitPath) => {
-      if (!/[^/]+\/[^/]+\/.*\.groovy$/.test(gitPath)) {
-        die('gitPath must have format org/repo/path/to/file.groovy');
+    .command('install <type> <path>')
+    .description(
+      'Install a resource from a GitHub path ' +
+        '(git:org/repo/file.groovy) or local file path'
+    )
+    .action(async (type, path) => {
+      if (!/[^/]+\/[^/]+\/.*\.groovy$/.test(path)) {
+        die('path must have format org/repo/path/to/file.groovy');
       }
 
-      const parts = gitPath.split('/');
-      const orgPath = join(repoDir, parts[0]);
-      mkdirp(orgPath);
+      let filename: string;
 
-      const repoPath = join(orgPath, parts[1]);
-      if (!existsSync(repoPath)) {
-        const repo = parts.slice(0, 2).join('/');
-        execSync(`git clone https://github.com/${repo}`, { cwd: orgPath });
+      if (/^git:/.test(path)) {
+        const gitPath = path.slice(4);
+        const parts = gitPath.split('/');
+        const orgPath = join(repoDir, parts[0]);
+        mkdirp(orgPath);
+
+        const repoPath = join(orgPath, parts[1]);
+        if (!existsSync(repoPath)) {
+          const repo = parts.slice(0, 2).join('/');
+          execSync(`git clone https://github.com/${repo}`, { cwd: orgPath });
+        }
+
+        filename = join(repoDir, gitPath);
+      } else {
+        filename = path;
       }
 
       try {
         const rtype = validateCodeType(type);
         const localManifest = loadManifest();
-        const filename = join(repoDir, gitPath);
 
-        console.log(`Installing ${gitPath}...`);
-        await createRemoteResource(rtype!, filename, localManifest);
+        console.log(`Installing ${filename}...`);
+        await createRemoteResource(rtype, filename, localManifest);
         saveManifest(localManifest);
       } catch (error) {
         die(error);
@@ -187,13 +200,14 @@ export default function init(context: Context) {
 // Implementation -------------------------------------------------------------
 
 /**
- * Update a remote resource. This should return a new version number which will
+ * Create a remote resource. This should return a new version number which will
  * be added to the manifest.
  */
 async function createRemoteResource(
   type: CodeResourceType,
   filename: string,
-  localManifest: Manifest
+  localManifest: Manifest,
+  isGithubResource = false
 ): Promise<boolean> {
   const source = readFileSync(filename, {
     encoding: 'utf8'
@@ -201,15 +215,27 @@ async function createRemoteResource(
 
   const hash = hashSource(source);
   console.log(`Creating ${type} ${filename}...`);
-  const newId = await postResource(type, source);
+  const newRes = await postResource(type, source);
+  let newEntry: ManifestEntry;
 
-  const newResource = {
-    hash,
-    filename,
-    id: newId,
-    version: 1
-  };
-  localManifest[type][newId] = toManifestEntry(newResource);
+  if (isGithubResource) {
+    newEntry = {
+      hash,
+      filename,
+      id: newRes.id,
+      version: 1
+    };
+  } else {
+    const resources = await getResources(hubitatHost, type);
+    const resource = resources.find(res => res.id === newRes.id)!;
+    newEntry = {
+      hash,
+      filename: getFilename(resource),
+      ...newRes
+    };
+  }
+
+  localManifest[type][newRes.id] = toManifestEntry(newEntry);
 
   return true;
 }
@@ -393,23 +419,28 @@ function toManifestEntry(resource: ManifestEntry) {
 }
 
 /**
+ * Get a filename for a resource
+ */
+function getFilename(resource: CodeResource) {
+  const { name, namespace } = resource;
+  return `${namespace}-${name!.toLowerCase().replace(/\s/g, '_')}.groovy`;
+}
+
+/**
  * Get a resource list from Hubitat
  */
 async function getFileResources(
-  resource: CodeResourceType
+  type: CodeResourceType
 ): Promise<FileResource[]> {
-  const resources = await getResources(hubitatHost, resource);
+  const resources = await getResources(hubitatHost, type);
 
   return Promise.all(
     resources.map(async res => {
-      const { id, name, namespace } = res;
-      const filename = `${namespace}-${name!
-        .toLowerCase()
-        .replace(/\s/g, '_')}.groovy`;
-
-      const item = await getResource(resource, Number(id));
+      const { id } = res;
+      const filename = getFilename(res);
+      const item = await getResource(type, Number(id));
       const hash = hashSource(item.source);
-      return { filename, hash, type: resource, ...item };
+      return { filename, hash, type, ...item };
     })
   );
 }
@@ -436,8 +467,9 @@ async function getResource(
 async function postResource(
   type: ResourceType,
   source: string
-): Promise<number> {
-  const response = await fetch(`http://${hubitatHost}/${type}/save`, {
+): Promise<CreateResource> {
+  const url = `http://${hubitatHost}/${type}/save`;
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: simpleEncode({ id: '', version: '', source })
@@ -446,8 +478,27 @@ async function postResource(
     throw new Error(`Error creating ${type}: ${response.statusText}`);
   }
 
-  const location = response.url;
-  return Number(location.split('/').pop()!);
+  const html = await response.text();
+  const $ = cheerio.load(html);
+
+  if (response.url === url) {
+    // URL didn't transition meaning code wasn't saved
+    const errors = $('#errors');
+    throw new Error(`Error creating ${type}: ${errors.text().trim()}`);
+  }
+
+  const form = $('form[name="editForm"]');
+  const id = $(form)
+    .find('input[name="id"]')
+    .val();
+  const version = $(form)
+    .find('input[name="version"]')
+    .val();
+
+  return {
+    id: Number(id),
+    version: Number(version)
+  };
 }
 
 /**
@@ -550,6 +601,11 @@ interface ManifestEntry {
 }
 
 type CodeResourceType = 'app' | 'driver';
+
+interface CreateResource {
+  id: number;
+  version: number;
+}
 
 interface ResponseResource {
   id: number;
