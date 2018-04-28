@@ -1,21 +1,22 @@
 /**
- * WeMo Motion driver
+ * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-04-28, 12:32:17-0400
+ * Last updated: 2018-04-28, 12:32:13-0400
  *
- * Based on the original Wemo Motion driver by SmartThings, 2013-10-11.
+ * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
+ * 2015-10-11.
  *
  * Copyright 2015 SmartThings
  *
- * Licensed under the Apache License, Version 2.0 (the 'License'); you may not
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy
  * of the License at:
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an 'AS IS' BASIS, WITHOUT
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations
  * under the License.
@@ -23,14 +24,17 @@
 
 metadata {
     definition(
-        name: 'Wemo Motion',
+        name: 'Wemo Insight Switch',
         namespace: 'jason0x43',
-        author: 'SmartThings'
+        author: 'Jason Cheatham'
     ) {
-        capability 'Motion Sensor'
+        capability 'Actuator'
+        capability 'Switch'
+        capability 'Polling'
         capability 'Refresh'
         capability 'Sensor'
-        capability 'Polling'
+        capability 'Power Meter'
+        capability 'Energy Meter'
 
         command 'subscribe'
         command 'unsubscribe'
@@ -38,13 +42,24 @@ metadata {
     }
 }
 
+def on() {
+    log.debug 'on()'
+    setBinaryState('1')
+}
+
+def off() {
+    log.debug 'off()'
+    setBinaryState('0')
+}
+
 def parse(description) {
-    log.debug "Parsing '${description}'"
+    log.trace "Parsing '${description}'"
 
     def msg = parseLanMessage(description)
     def headerString = msg.header
 
-    if (headerString?.contains('SID: uuid:')) {
+    if (headerString?.contains("SID: uuid:")) {
+        log.trace 'Header string: ' + headerString
         def sid = (headerString =~ /SID: uuid:.*/) ?
             (headerString =~ /SID: uuid:.*/)[0] :
             '0'
@@ -59,14 +74,14 @@ def parse(description) {
         try {
             unschedule('setOffline')
         } catch (e) {
-            log.error 'unschedule(\'setOffline\')'
+            log.error 'unschedule("setOffline")'
         }
 
         log.trace 'body: ' + bodyString
         def body = new XmlSlurper().parseText(bodyString)
 
         if (body?.property?.TimeSyncRequest?.text()) {
-            log.trace 'Got TimeSyncRequest'
+            log.trace "Got TimeSyncRequest"
             result << timeSyncResponse()
         } else if (body?.Body?.SetBinaryStateResponse?.BinaryState?.text()) {
             def rawValue = body.Body.SetBinaryStateResponse.BinaryState.text()
@@ -74,7 +89,7 @@ def parse(description) {
             result << createBinaryStateEvent(rawValue)
         } else if (body?.property?.BinaryState?.text()) {
             def rawValue = body.property.BinaryState.text()
-            log.debug "Notify - BinaryState = ${rawValue}"
+            log.trace "Notify: BinaryState = ${rawValue}"
             result << createBinaryStateEvent(rawValue)
         } else if (body?.property?.TimeZoneNotification?.text()) {
             log.debug "Notify: TimeZoneNotification = ${body.property.TimeZoneNotification.text()}"
@@ -82,6 +97,11 @@ def parse(description) {
             def rawValue = body.Body.GetBinaryStateResponse.BinaryState.text()
             log.trace "GetBinaryResponse: BinaryState = ${rawValue}"
             result << createBinaryStateEvent(rawValue)
+        } else if (body?.Body?.GetInsightParamsResponse?.InsightParams?.text()) {
+            def params = body.Body.GetInsightParamsResponse.InsightParams.text().split("\\|")
+            result << createBinaryStateEvent(params[0])
+            result << createEnergyEvent(params[8])
+            result << createPowerEvent(params[9])
         }
     }
 
@@ -89,49 +109,37 @@ def parse(description) {
 }
 
 def poll() {
-    log.debug 'Executing poll()'
-    if (device.currentValue('motion') != 'offline') {
+    log.debug "Executing 'poll'"
+
+    if (device.currentValue("currentIP") != "Offline") {
         runIn(30, setOffline)
     }
 
     new hubitat.device.HubSoapAction(
-        path: '/upnp/control/basicevent1',
-        urn: 'urn:Belkin:service:basicevent:1',
-        action: 'GetBinaryState',
+        path: '/upnp/control/insight1',
+        urn: 'urn:Belkin:service:insight:1',
+        action: 'GetInsightParams',
         headers: [
-            HOST: getHostAddress()
+            Host: getHostAddress()
         ]
     )
 }
 
 def refresh() {
-    log.debug 'Executing subscribe(), then timeSyncResponse(), then poll()'
+     log.debug 'refresh()'
     [subscribe(), timeSyncResponse(), poll()]
-}
-
-def resubscribe() {
-    log.debug 'Executing resubscribe()'
-    new hubitat.device.HubAction(
-        method: 'SUBSCRIBE',
-        path: '/upnp/event/basicevent1',
-        headers: [
-            HOST: getHostAddress(),
-            SID: "uuid:${getDeviceDataByName('subscriptionId')}",
-            TIMEOUT: "Second-${60 * (parent.interval?:5)}"
-        ]
-    )
 }
 
 def setOffline() {
     sendEvent(
-        name: 'motion',
+        name: 'switch',
         value: 'offline',
         descriptionText: 'The device is offline'
     )
 }
 
 def subscribe() {
-    log.debug 'Executing subscribe()'
+    log.debug 'subscribe()'
     new hubitat.device.HubAction(
         method: 'SUBSCRIBE',
         path: '/upnp/event/basicevent1',
@@ -139,17 +147,18 @@ def subscribe() {
             HOST: getHostAddress(),
             CALLBACK: "<http://${getCallBackAddress()}/>",
             NT: 'upnp:event',
-            TIMEOUT: "Second-${60 * (parent.interval?:5)}"
+            TIMEOUT: "Second-${60 * (parent.interval ?: 5)}"
         ]
     )
 }
 
 def sync(ip, port) {
+    log.trace "Syncing to ${ip}:${port}"
     def existingIp = getDataValue('ip')
     def existingPort = getDataValue('port')
 
     if (ip && ip != existingIp) {
-        log.debug "Updating ip from $existingIp to $ip"
+        log.debug "Updating IP from ${existingIp} to ${ip}"
         updateDataValue('ip', ip)
     }
 
@@ -165,10 +174,10 @@ def timeSyncResponse() {
     log.debug 'Executing timeSyncResponse()'
     new hubitat.device.HubSoapAction(
         path: '/upnp/control/timesync1',
-        urn: 'urn:Belkin:service:timesync:1',
+        url: 'urn:Belkin:service:timesync:1',
         action: 'TimeSync',
         body: [
-            // TODO: Use UTC Timezone
+            //TODO: Use UTC Timezone
             UTC: getTime(),
             TimeZone: '-05.00',
             dst: 1,
@@ -181,7 +190,7 @@ def timeSyncResponse() {
 }
 
 def unsubscribe() {
-    log.debug 'Executing unsubscribe()'
+    log.debug 'unsubscribe()'
     new hubitat.device.HubAction(
         method: 'UNSUBSCRIBE',
         path: '/upnp/event/basicevent1',
@@ -198,11 +207,11 @@ def updated() {
 }
 
 private convertHexToInt(hex) {
-     Integer.parseInt(hex,16)
+    Integer.parseInt(hex,16)
 }
 
 private convertHexToIP(hex) {
-     [
+    [
         convertHexToInt(hex[0..1]),
         convertHexToInt(hex[2..3]),
         convertHexToInt(hex[4..5]),
@@ -211,11 +220,29 @@ private convertHexToIP(hex) {
 }
 
 private createBinaryStateEvent(rawValue) {
-    def value = rawValue == '1' ? 'active' : 'inactive'
+    def value = rawValue == '1' ? 'on' : 'off';
     createEvent(
-        name: 'motion',
+        name: 'switch',
         value: value,
-        descriptionText: "Motion is ${value}"
+        descriptionText: "Switch is ${value}"
+    )
+}
+
+private createEnergyEvent(rawValue) {
+    def value = Math.ceil(rawValue.toInteger() / 60000000)
+    createEvent(
+        name: 'energy',
+        value: value,
+        descriptionText: "Energy is ${value} KWH"
+    )
+}
+
+private createPowerEvent(rawValue) {
+    def value = Math.round(rawValue.toInteger() / 1000)
+    createEvent(
+        name: 'power',
+        value: value,
+        descriptionText: "Power is ${value} W"
     )
 }
 
@@ -238,7 +265,7 @@ private getHostAddress() {
             log.warn "Can't figure out ip and port for device: ${device.id}"
         }
     }
-    log.debug "Using ip: ${ip} and port: ${port} for device: ${device.id}"
+
     "${convertHexToIP(ip)}:${convertHexToInt(port)}"
 }
 
@@ -246,4 +273,18 @@ private getTime() {
     // This is essentially System.currentTimeMillis()/1000, but System is
     // disallowed by the sandbox.
     ((new GregorianCalendar().time.time / 1000l).toInteger()).toString()
+}
+
+private setBinaryState(newState) {
+    new hubitat.device.HubSoapAction(
+        path: '/upnp/control/basicevent1',
+        urn: 'urn:Belkin:service:basicevent:1',
+        action: 'SetBinaryState',
+        body: [
+            BinaryState: newState
+        ],
+        headers: [
+            Host: getHostAddress()
+        ]
+    )
 }
