@@ -2,7 +2,7 @@
  * Manager app for Nest thermostat
  *
  * Author: Jason Cheatham
- * Last updated: 2018-04-13, 13:06 ET
+ * Last updated: 2018-05-01, 09:15:53-0400
  *
  * To use this app you first need to create an OAuth client on
  * https://developers.nest.com.  The properties should look like:
@@ -173,7 +173,6 @@ def authFinishPage() {
 		) { resp ->
 			log.debug "oauthData: ${resp.data}"
 			state.accessToken = resp.data.access_token
-			state.accessTokenExpires = now() + resp.data.expires_in
 		}
 
 		status = 'Nest was successfully authorized'
@@ -394,10 +393,13 @@ private getThermostats() {
 }
 
 private isAuthorized() {
-	log.debug "Is authorized? token=${state.accessToken}, expiresIn=${state.accessTokenExpires}"
-	return state.accessToken != null &&
-		state.accessTokenExpires != null &&
-		state.accessTokenExpires - now() > 0
+	log.trace "Is authorized? token=${state.accessToken}"
+	if (state.accessToken == null) {
+		log.trace "No token"
+		return false
+	}
+
+	return true
 }
 
 private disconnect() {
