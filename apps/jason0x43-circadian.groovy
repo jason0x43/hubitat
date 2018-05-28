@@ -2,8 +2,7 @@
  * Circadian
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Date:    2018-03-27
- * Version: 1.0
+ * Last updated: 2018-05-28, 10:43:55-0400
  *
  * Set light color temperature throughout the day.
  */
@@ -119,7 +118,7 @@ def updateColorTemp() {
  * Update the color temp of a light when it's turned on
  */
 def setLightTemp(evt) {
-	def device = evt.getDevice()
+    def device = evt.getDevice()
     log.debug "Setting color temp for ${device} to ${state.colorTemp}"
     evt.getDevice().setColorTemperature(state.colorTemp)
 }
