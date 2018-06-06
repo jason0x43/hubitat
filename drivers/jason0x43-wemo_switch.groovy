@@ -2,7 +2,7 @@
  * WeMo Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-04-28, 12:32:25-0400
+ * Last updated: 2018-06-05, 22:50:45-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -61,6 +61,10 @@ def parse(description) {
         sid -= 'SID: uuid:'.trim()
         log.trace 'Updating subscriptionId to ' + sid
         updateDataValue('subscriptionId', sid)
+
+        def resubscribeTimeout = getSubscriptionTimeout() - 10
+        log.trace "Scheduling resubscription in ${resubscribeTimeout} s"
+        runIn(resubscribeTimeout, resubscribe)
      }
 
     def result = []
@@ -127,7 +131,7 @@ def resubscribe() {
         headers: [
             HOST: getHostAddress(),
             SID: "uuid:${sid}",
-            TIMEOUT: "Second-${60 * (parent.interval ?: 5)}"
+            TIMEOUT: "Second-${getSubscriptionTimeout()}"
         ]
     )
 }
@@ -149,7 +153,7 @@ def subscribe() {
             HOST: getHostAddress(),
             CALLBACK: "<http://${getCallBackAddress()}/>",
             NT: 'upnp:event',
-            TIMEOUT: "Second-${60 * (parent.interval ?: 5)}"
+            TIMEOUT: "Second-${getSubscriptionTimeout()}"
         ]
     )
 }
@@ -204,7 +208,7 @@ def unsubscribe() {
 }
 
 def updated() {
-	log.debug 'Updated'
+    log.debug 'Updated'
     refresh()
 }
 
@@ -257,6 +261,10 @@ private getTime() {
     // This is essentially System.currentTimeMillis()/1000, but System is
     // disallowed by the sandbox.
     ((new GregorianCalendar().time.time / 1000l).toInteger()).toString()
+}
+
+private getSubscriptionTimeout() {
+    return 60 * (parent.interval?:5)
 }
 
 private setBinaryState(newState) {

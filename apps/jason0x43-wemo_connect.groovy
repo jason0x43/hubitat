@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2018-04-28, 12:10:19-0400
+ * Last updated: 2018-06-05, 22:43:12-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -77,7 +77,7 @@ def mainPage() {
             input(
                 'interval',
                 'number',
-                title: 'Set refresh minutes',
+                title: 'How often should WeMo devices be refreshed? (minutes)',
                 defaultValue: 5
             )
         }
