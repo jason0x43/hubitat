@@ -2,7 +2,7 @@
  * Circadian
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Last updated: 2018-05-28, 10:43:55-0400
+ * Last updated: 2018-05-28, 11:14:28-0400
  *
  * Set light color temperature throughout the day.
  */
@@ -23,9 +23,39 @@ preferences {
 
 def mainPage() {
     dynamicPage(name: 'mainPage', uninstall: true, install: true) {
-        section('Select lights to manage...') {
-           input 'lights', 'capability.colorTemperature', multiple: true
-           // input 'frequency', 'number', title: 'Select update frequency (default is 5 minutes)'
+        section('Select lights to manage:') {
+            input(
+                name: 'lights',
+                type: 'capability.colorTemperature',
+                multiple: true
+            )
+        }
+
+        section('Options') {
+            input(
+                name: 'maxTemp',
+                title: 'Maximum temperature, used at noon',
+                type: 'number',
+                defaultValue: 6500,
+                required: true,
+                range: '2200..6500'
+            )
+            input(
+                name: 'minTemp',
+                title: 'Minimum temperature, used at night',
+                type: 'number',
+                defaultValue: 2200,
+                required: true,
+                range: '2200..6500'
+            )
+            input(
+                name: 'midTemp',
+                title: 'Base temperature, used at dawn and dusk',
+                type: 'number',
+                defaultValue: 2700,
+                required: true,
+                range: '2200..6500'
+            )
         }
     }
 }
@@ -58,53 +88,33 @@ def initialize() {
 def updateColorTemp() {
     log.debug 'Updating color temp'
     
-    // Update color temp based on current time
-    def times = getSunriseAndSunset(sunriseOffset: -60, sunsetOffset: -60)
-    def realTimes = getSunriseAndSunset(sunriseOffset: 0, sunsetOffset: 0)
-    def now = new Date()
-    def sunrise = times.sunrise
-    def sunset = times.sunset
-    def realSunset = realTimes.sunset
+    def times = getSunriseAndSunset(sunriseOffset: 0, sunsetOffset: 0)
+    def sunrise = times.sunrise.time
+    def sunset = times.sunset.time
+    def midday = sunrise + ((sunset - sunrise) / 2)
+    def now = new Date().time
 
-    // This is an 'or' because after midnight sunset will switch
-    // to the next day
-    if (now.after(realSunset) || now.before(sunrise)) {
-        // At night it's always 2200
-        state.colorTemp = 2200;
+    def maxTemp = settings.maxTemp
+    def minTemp = settings.minTemp
+    def tempRange = maxTemp - minTemp
+
+    log.trace "sunrise: ${sunrise}, sunset: ${sunset}, midday: ${midday}"
+
+    if (now > sunset && now < sunrise) {
+        state.colorTemp = minTemp
     } else {
-        def startTime
-        def endTime
-        def startTemp
-        def endTemp
-        
-        if (now.after(sunset)) {
-            // During the evening the temp 2700 and gradually moves down to
-            // 2200
-            startTime = sunset.getTime()
-            endTime = realSunset.getTime()
-            startTemp = 2700
-            endTemp = 2200
+        def temp
+
+        if (now > midday) {
+            temp = maxTemp - ((now - midday) / (sunset - midday) * tempRange)
         } else {
-            // During the day the temp starts out at 3200 and gradually moves
-            // down to 2700
-            startTime = sunrise.getTime()
-            endTime = sunset.getTime()
-            startTemp = 3200
-            endTemp = 2700
+            temp = minTemp + ((now - sunrise) / (midday - sunrise) * tempRange)
         }
 
-        def range = endTime - startTime
-        def nowTime = now.getTime()
-        // minutes from sunrise to now
-        def delta = nowTime - startTime
-        //log.trace "Delta: ${delta}"
-        // percent progress
-        def progress = delta / range;
-        //log.trace "Progress: ${progress}"
-
-        state.colorTemp = (startTemp - progress * (startTemp - endTemp)).toInteger()
-        log.debug "New colorTemp is ${state.colorTemp}"
+        state.colorTemp = temp.toInteger()
     }
+
+    log.debug "New colorTemp is ${state.colorTemp}"
     
     // Update the color temp of any lights that are currently on
     for (light in lights) {
