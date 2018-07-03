@@ -2,7 +2,7 @@
  * WeMo Motion driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-06-05, 22:48:53-0400
+ * Last updated: 2018-06-08, 14:42:37-0400
  *
  * Based on the original Wemo Motion driver by SmartThings, 2013-10-11.
  *
@@ -52,7 +52,7 @@ def parse(description) {
         log.trace 'Updating subscriptionId to ' + sid
         updateDataValue('subscriptionId', sid)
 
-        def resubscribeTimeout = getSubscriptionTimeout() - 10
+        def resubscribeTimeout = getSubscriptionTimeout().intdiv(2)
         log.trace "Scheduling resubscription in ${resubscribeTimeout} s"
         runIn(resubscribeTimeout, resubscribe)
     }
