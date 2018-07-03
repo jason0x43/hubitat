@@ -2,7 +2,7 @@
  * Scene
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Date:    2018-03-24
+ * Last updated: 2018-06-03, 16:33:50-0400
  * Version: 1.0
  *
  * Based on Scene Machine by Todd Wackford
@@ -27,10 +27,36 @@ definition(
 ) 
  
 preferences {
-    section('Select switches to control...') {
-       input 'switches', 'capability.switch', multiple: true
-       input 'useColorTemp', 'bool', title: 'Manage color temp?', defaultValue: false
-       input 'shouldUpdate', 'bool', title: 'Update scene?', defaultValue: false
+    page(name: 'mainPage')
+}
+
+def mainPage() {
+    dynamicPage(name: 'mainPage', uninstall: true, install: true) {
+        section('Name') {
+            label(title: 'Scene name', type: 'string', required: true)
+        }
+
+        getLightGroups().each {
+            def name = it
+            def id = name.substring(10)
+            def state = sprintf('sceneSwitch%s', id)
+            def level = sprintf('sceneLevel%s', id)
+
+            section('Lights') {
+                input(name: name, type: 'capability.switch', multiple: true, submitOnChange: true)
+                input(name: state, title: 'On/off', type: 'bool', submitOnChange: true)
+
+                if (settings[state] && supportsLevel(name)) {
+                    input(name: level, title: 'Level', type: 'number')
+                }
+            }
+        }
+
+        def name = sprintf('sceneLight%d', getNextId())
+
+        section('Lights') {
+            input (name: name, type: 'capability.switch', multiple: true, submitOnChange: true)
+        }
     }
 }
 
@@ -40,10 +66,6 @@ def installed() {
     // Create a switch to activate the scene
     def child = createChildDevice(app.label)
     subscribe(child, 'switch.on', setScene)
-    
-    if (shouldUpdate) {
-        updateScene()
-    }
 }
 
 def uninstalled() {
@@ -61,99 +83,36 @@ def updated() {
     // Create a switch to activate the scene
     def child = createChildDevice(app.label)
     subscribe(child, 'switch.on', setScene)
-    
-    if (shouldUpdate) {
-        updateScene()
-    }
 }
 
 def setScene(evt) {
-    log.debug('Setting scene')
+    log.debug 'Setting scene'
     
-    def i = 0
-    for (myData in state.lastSwitchData) {
-        def switchName  = myData.switchName
-        def switchType  = myData.switchType
-        def switchState = myData.switchState
-        def level = ''
-        def colorTemp = ''
-        
-        if (myData.dimmerValue != 'null') {
-           level = myData.dimmerValue.toInteger()
-        } else {
-           level = 0
-        }
-        
-        if (myData.colorTemp && myData.colorTemp != 'null') {
-            colorTemp = myData.colorTemp.toInteger()
-        } else {
-            colorTemp = 0
-        }
-        
-        log.info "switchName: $switchName"
-        log.info "switchType: $switchType"
-        log.info "switchState: $switchState"
-        log.info "level: $level"
-        log.info "colorTemp: $colorTemp"
+    getLightGroups().each {
+        def name = it
+        def state = getLightState(name)
+        def group = settings[name]
 
-        if (switchState == 'on') {
-            switches[i].on()
-            
-            if (level > 0) {
-                switches[i].setLevel(level)
-            }
-        
-            if (useColorTemp && colorTemp > 0) {
-                switches[i].setColorTemperature(colorTemp)
+        group.each {
+            def light = it
+            def currentSwitch = light.currentSwitch
+
+            if (state.switch) {
+                if (currentSwitch != 'on') {
+                    light.on()
+                }
+
+                def currentLevel = light.currentLevel
+                if (state.level != null && currentLevel != null && state.level != currentLevel) {
+                    light.setLevel(state.level)
+                }
+            } else if (currentSwitch == 'on') {
+                light.off()
             }
         }
-        
-        if (switchState == 'off') {
-            switches[i].off()
-        }
-
-        i++
-        log.info 'Device setting is Done-------------------'
     }
-}
 
-private updateScene() {
-    log.debug 'Updating scene'
-
-    def count = 0
-    for (s in switches) {
-        log.debug "Refreshing ${s}"
-        s.refresh()
-        count++
-    }
-    
-    // Wait for refresh data to arrive.
-    pauseExecution(1000)
-    
-    state.lastSwitchData = [count]
-    
-    def i = 0
-    for (mySwitch in switches) {
-        def switchName  = mySwitch.device.toString()
-        def switchType  = mySwitch.name.toString()
-        def switchState = mySwitch.latestValue('switch').toString()
-
-        // the latestValue calls below return null if the devices
-        // don't have the necessary capabilities
-        def level = mySwitch.latestValue('level').toString()
-        def colorTemp = mySwitch.latestValue('colorTemperature').toString()
-        
-        state.lastSwitchData[i] = [
-            switchName: switchName,
-            switchType: switchType,
-            switchState: switchState,
-            dimmerValue: level,
-            colorTemp: colorTemp
-        ]
-
-        log.debug "SwitchData: ${state.lastSwitchData[i]}"
-        i++   
-    }  
+    log.trace 'Done setting scene'
 }
 
 private createChildDevice(deviceLabel) {
@@ -180,4 +139,40 @@ private createChildDevice(deviceLabel) {
 
 private getDeviceID() {
     return "SBSW_${app.id}"
+}
+
+private getGroupId(name) {
+    return name.substring(10)
+}
+
+private getLightGroups() {
+    def entries = settings.findAll { k, v -> k.startsWith('sceneLight') }
+    return entries.keySet()
+}
+
+private getNextId() {
+    def groups = getLightGroups()
+    def nextId
+    if (groups.size() > 0) {
+        def ids = groups.collect { getGroupId(it).toInteger() }
+        def maxId = ids.max()
+        nextId = maxId + 1
+    } else {
+        nextId = 0
+    }
+}
+
+private getLightState(name) {
+    def id = getGroupId(name)
+    def state = [ switch: settings["sceneSwitch${id}"] ]
+    if (state) {
+        state.level = settings["sceneLevel${id}"]
+    }
+    return state
+}
+
+private supportsLevel(name) {
+    return settings[name].any { 
+        it.supportedCommands.any { it.name == 'setLevel' }
+    }
 }
