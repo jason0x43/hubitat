@@ -2,7 +2,7 @@
  * Manager app for Nest thermostat
  *
  * Author: Jason Cheatham
- * Last updated: 2018-05-01, 09:15:53-0400
+ * Last updated: 2018-07-12, 16:54:18-0400
  *
  * To use this app you first need to create an OAuth client on
  * https://developers.nest.com.  The properties should look like:
@@ -49,7 +49,8 @@ def mainPage() {
 	dynamicPage(
 		name: 'mainPage',
 		submitOnChange: true,
-		install: readyToInstall
+		install: readyToInstall,
+		uninstall: true
 	) {
 		def authState = isAuthorized() ? '[Connected]\n' : '[Not Connected]\n'
 
