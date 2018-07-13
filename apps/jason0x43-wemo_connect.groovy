@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2018-06-05, 22:43:12-0400
+ * Last updated: 2018-07-13, 08:47:14-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -211,7 +211,7 @@ private addDevices() {
 
             switch (selectedDevice.value.ssdpTerm){
                 case ~/.*insight.*/: 
-                    name = 'WeMo Insight Switch'
+                    name = 'Wemo Insight Switch'
                     break
 
                 // The Light Switch and Switch use the same driver
