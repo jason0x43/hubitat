@@ -2,7 +2,7 @@
  * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-06-08, 14:42:53-0400
+ * Last updated: 2018-07-15, 09:25:28-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -237,7 +237,12 @@ private convertHexToIP(hex) {
 }
 
 private createBinaryStateEvent(rawValue) {
-    def value = rawValue == '1' ? 'on' : 'off';
+    // Insight switches actually support 3 values:
+    //   0: off
+    //   1: on
+    //   8: standby
+    // We consider 'standby' to be 'on'.
+    def value = rawValue == '0' ? 'off' : 'on';
     createEvent(
         name: 'switch',
         value: value,
