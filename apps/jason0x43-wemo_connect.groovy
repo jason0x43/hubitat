@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2018-07-13, 08:47:14-0400
+ * Last updated: 2018-07-15, 12:03:33-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -96,9 +96,27 @@ def updated() {
 
 def initialize() {
     log.debug 'Initializing'
+    unschedule()
     if (selectedDevices) {
-        addDevices()
+        initDevices()
     }
+}
+
+def childGetHostAddress(device) {
+     def ip = device.getDataValue('ip')
+     def port = device.getDataValue('port')
+
+     if (!ip || !port) {
+         def parts = device.deviceNetworkId.split(':')
+         if (parts.length == 2) {
+             ip = parts[0]
+             port = parts[1]
+         } else {
+             log.warn "Can't figure out ip and port for device: ${device.id}"
+         }
+     }
+
+     "${convertHexToIP(ip)}:${convertHexToInt(port)}"
 }
 
 def getHostAddress(dni) {
@@ -111,6 +129,35 @@ def getHostAddress(dni) {
     }
 
     "${convertHexToIP(ip)}:${convertHexToInt(port)}"
+}
+
+def getSubscriptionData(message) {
+    def headerString = message.header
+
+    if (isSubscriptionHeader(headerString)) {
+        return [
+            sid: getSubscriptionId(headerString),
+            timeout: getSubscriptionTimeout() - 30
+        ]
+    }
+}
+
+def getSubscriptionId(header) {
+    def sid = (header =~ /SID: uuid:.*/) ?
+        (header =~ /SID: uuid:.*/)[0] :
+        '0'
+    sid -= 'SID: uuid:'.trim()
+    return sid;
+}
+
+def getSubscriptionTimeout() {
+    return 60 * (settings.interval?:5)
+}
+
+def getTime() {
+    // This is essentially System.currentTimeMillis()/1000, but System is
+    // disallowed by the sandbox.
+    ((new GregorianCalendar().time.time / 1000l).toInteger()).toString()
 }
 
 def handleSetupXml(response) {
@@ -183,8 +230,172 @@ def handleSsdpEvent(evt) {
     }
 }
 
-private addDevices() {
-    log.trace 'Adding devices'
+def isSubscriptionHeader(header) {
+    if (header == null) {
+        return false;
+    }
+    return header.contains("SID: uuid:") && header.contains('TIMEOUT:');
+}
+
+def childGetBinaryState(child) {
+    return new hubitat.device.HubSoapAction(
+        path: '/upnp/control/basicevent1',
+        urn: 'urn:Belkin:service:basicevent:1',
+        action: 'GetBinaryState',
+        headers: [
+            HOST: childGetHostAddress(child)
+
+        ]
+    )
+}
+
+def childRefresh(child) {
+    log.debug "childRefresh(${child})"
+    [
+        childSubscribe(child),
+        childTimeSyncResponse(child),
+        child.poll()
+    ]
+}
+
+def childResubscribe(child) {
+    log.debug "childResubscribe(${child})"
+
+    def sid = child.getDataValue('subscriptionId')
+
+    if (sid == null) {
+        log.trace 'No existing subscription -- subscribing'
+        childSubscribe(child)
+    } else {
+        // Clear out any current subscription ID; will be reset when the
+        // subscription completes
+        log.trace 'Clearing existing sid'
+        child.updateDataValue('subscriptionId', null)
+
+        new hubitat.device.HubAction([
+            method: 'SUBSCRIBE',
+            path: '/upnp/event/basicevent1',
+            headers: [
+                HOST: childGetHostAddress(child),
+                CALLBACK: "<http://${getCallbackAddress()}/>",
+                NT: 'upnp:event',
+                TIMEOUT: "Second-${getSubscriptionTimeout()}"
+            ]
+        ], child.deviceNetworkId)
+    }
+}
+
+def childSetBinaryState(child, state) {
+    new hubitat.device.HubSoapAction(
+        path: '/upnp/control/basicevent1',
+        urn: 'urn:Belkin:service:basicevent:1',
+        action: 'SetBinaryState',
+        body: [
+            BinaryState: state
+        ],
+        headers: [
+            Host: childGetHostAddress(child)
+        ]
+    )
+}
+
+def childSubscribe(child) {
+    log.debug "childSubscribe(${child})"
+
+    // Clear out any current subscription ID; will be reset when the
+    // subscription completes
+    log.trace 'Clearing existing sid'
+    child.updateDataValue('subscriptionId', null)
+
+    def dni = child.deviceNetworkId
+
+    new hubitat.device.HubAction([
+        method: 'SUBSCRIBE',
+        path: '/upnp/event/basicevent1',
+        headers: [
+            HOST: childGetHostAddress(child),
+            CALLBACK: "<http://${getCallbackAddress()}/>",
+            NT: 'upnp:event',
+            TIMEOUT: "Second-${getSubscriptionTimeout()}"
+        ]
+    ], dni)
+}
+
+def childSubscribeIfNecessary(child) {
+    log.trace "childSubscribeIfNecessary(${child})"
+    def sid = child.getDataValue('subscriptionId')
+    if (sid == null) {
+        childSubscribe(child)
+    }
+}
+
+def childSync(child, ip, port) {
+    log.trace "childSync(${child}, ${ip}:${port})"
+
+    def existingIp = child.getDataValue('ip')
+    def existingPort = child.getDataValue('port')
+
+    if (ip && ip != existingIp) {
+        log.trace "Updating IP from ${existingIp} to ${ip}"
+        child.updateDataValue('ip', ip)
+    }
+
+    if (port && port != existingPort) {
+        log.trace "Updating port from $existingPort to $port"
+        child.updateDataValue('port', port)
+    }
+
+    childSubscribe(child)
+}
+
+def childTimeSyncResponse(child) {
+    log.debug "childTimeSyncResponse(${child})"
+
+    new hubitat.device.HubSoapAction(
+        path: '/upnp/control/timesync1',
+        url: 'urn:Belkin:service:timesync:1',
+        action: 'TimeSync',
+        body: [
+            //TODO: Use UTC Timezone
+            UTC: getTime(),
+            TimeZone: '-05.00',
+            dst: 1,
+            DstSupported: 1
+        ],
+        headers: [
+            HOST: childGetHostAddress(child)
+        ]
+    )
+}
+
+def childUnsubscribe(child) {
+    log.debug "childUnsubscribe(${child})"
+
+    def sid = child.getDataValue('subscriptionId')
+
+    // Clear out the current subscription ID
+    log.trace 'Clearing existing sid'
+    child.updateDataValue('subscriptionId', null)
+
+    new hubitat.device.HubAction([
+        method: 'UNSUBSCRIBE',
+        path: '/upnp/event/basicevent1',
+        headers: [
+            HOST: getHostAddress(child),
+            SID: "uuid:${sid}"
+        ]
+    ], child.deviceNetworkId)
+}
+
+private getCallbackAddress() {
+    def hub = location.hubs[0];
+    def localIp = hub.getDataValue('localIP')
+    def localPort = hub.getDataValue('localSrvPortTCP')
+    "${localIp}:${localPort}"
+}
+
+private initDevices() {
+    log.trace 'Initializing devices'
 
     def devices = getWemoDevices()
 
@@ -249,6 +460,9 @@ private addDevices() {
         } else {
             log.trace "Device ${createdDevice.displayName} with id $dni already exists"
         }
+
+        log.trace 'Setting up device subscription...'
+        createdDevice.refresh()
     }
 }
 

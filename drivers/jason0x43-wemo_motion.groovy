@@ -2,7 +2,7 @@
  * WeMo Motion driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-06-08, 14:42:37-0400
+ * Last updated: 2018-07-15, 13:54:42-0400
  *
  * Based on the original Wemo Motion driver by SmartThings, 2013-10-11.
  *
@@ -25,12 +25,12 @@ metadata {
     definition(
         name: 'Wemo Motion',
         namespace: 'jason0x43',
-        author: 'SmartThings'
+        author: 'Jason Cheatham'
     ) {
         capability 'Motion Sensor'
+        capability 'Polling'
         capability 'Refresh'
         capability 'Sensor'
-        capability 'Polling'
 
         command 'subscribe'
         command 'unsubscribe'
@@ -39,22 +39,16 @@ metadata {
 }
 
 def parse(description) {
-    log.debug "Parsing '${description}'"
+    log.debug 'parse()'
 
     def msg = parseLanMessage(description)
-    def headerString = msg.header
 
-    if (headerString?.contains('SID: uuid:')) {
-        def sid = (headerString =~ /SID: uuid:.*/) ?
-            (headerString =~ /SID: uuid:.*/)[0] :
-            '0'
-        sid -= 'SID: uuid:'.trim()
-        log.trace 'Updating subscriptionId to ' + sid
-        updateDataValue('subscriptionId', sid)
-
-        def resubscribeTimeout = getSubscriptionTimeout().intdiv(2)
-        log.trace "Scheduling resubscription in ${resubscribeTimeout} s"
-        runIn(resubscribeTimeout, resubscribe)
+    def subscriptionData = parent.getSubscriptionData(msg)
+    if (subscriptionData != null) {
+        log.trace "Updating subscriptionId to ${subscriptionData.sid}"
+        updateDataValue('subscriptionId', subscriptionData.sid)
+        log.trace "Scheduling resubscription in ${subscriptionData.timeout} s"
+        runIn(subscriptionData.timeout, resubscribe)
     }
 
     def result = []
@@ -63,10 +57,9 @@ def parse(description) {
         try {
             unschedule('setOffline')
         } catch (e) {
-            log.error 'unschedule(\'setOffline\')'
+            log.error 'unschedule("setOffline")'
         }
 
-        log.trace 'body: ' + bodyString
         def body = new XmlSlurper().parseText(bodyString)
 
         if (body?.property?.TimeSyncRequest?.text()) {
@@ -78,7 +71,7 @@ def parse(description) {
             result << createBinaryStateEvent(rawValue)
         } else if (body?.property?.BinaryState?.text()) {
             def rawValue = body.property.BinaryState.text()
-            log.debug "Notify - BinaryState = ${rawValue}"
+            log.trace "Notify: BinaryState = ${rawValue}"
             result << createBinaryStateEvent(rawValue)
         } else if (body?.property?.TimeZoneNotification?.text()) {
             log.debug "Notify: TimeZoneNotification = ${body.property.TimeZoneNotification.text()}"
@@ -93,37 +86,26 @@ def parse(description) {
 }
 
 def poll() {
-    log.debug 'Executing poll()'
+    log.debug 'poll()'
     if (device.currentValue('motion') != 'offline') {
         runIn(30, setOffline)
     }
-
-    new hubitat.device.HubSoapAction(
-        path: '/upnp/control/basicevent1',
-        urn: 'urn:Belkin:service:basicevent:1',
-        action: 'GetBinaryState',
-        headers: [
-            HOST: getHostAddress()
-        ]
-    )
+    parent.childGetBinaryState(device)
 }
 
 def refresh() {
-    log.debug 'Executing subscribe(), then timeSyncResponse(), then poll()'
-    [subscribe(), timeSyncResponse(), poll()]
+    log.debug 'refresh()'
+    parent.childRefresh(device)
 }
 
 def resubscribe() {
-    log.debug 'Executing resubscribe()'
-    new hubitat.device.HubAction(
-        method: 'SUBSCRIBE',
-        path: '/upnp/event/basicevent1',
-        headers: [
-            HOST: getHostAddress(),
-            SID: "uuid:${getDeviceDataByName('subscriptionId')}",
-            TIMEOUT: "Second-${getSubscriptionTimeout()}"
-        ]
-    )
+    log.debug 'resubscribe()'
+    runIn(10, subscribeIfNecessary)
+    parent.childResubscribe(device)
+}
+
+def scheduleResubscribe(timeout) {
+    runIn(resubscribeTimeout, resubscribe)
 }
 
 def setOffline() {
@@ -135,65 +117,28 @@ def setOffline() {
 }
 
 def subscribe() {
-    log.debug 'Executing subscribe()'
-    new hubitat.device.HubAction(
-        method: 'SUBSCRIBE',
-        path: '/upnp/event/basicevent1',
-        headers: [
-            HOST: getHostAddress(),
-            CALLBACK: "<http://${getCallBackAddress()}/>",
-            NT: 'upnp:event',
-            TIMEOUT: "Second-${getSubscriptionTimeout()}"
-        ]
-    )
+    log.debug 'subscribe()'
+    parent.childSubscribe(device)
+}
+
+def subscribeIfNecessary() {
+    log.trace 'subscribeIfNecessary'
+    parent.childSubscribeIfNecessary(device)
 }
 
 def sync(ip, port) {
-    def existingIp = getDataValue('ip')
-    def existingPort = getDataValue('port')
-
-    if (ip && ip != existingIp) {
-        log.debug "Updating ip from $existingIp to $ip"
-        updateDataValue('ip', ip)
-    }
-
-    if (port && port != existingPort) {
-        log.debug "Updating port from $existingPort to $port"
-        updateDataValue('port', port)
-    }
-
-    subscribe()
+    log.debug 'sync()'
+    parent.childSync(device, ip, port)
 }
 
 def timeSyncResponse() {
     log.debug 'Executing timeSyncResponse()'
-    new hubitat.device.HubSoapAction(
-        path: '/upnp/control/timesync1',
-        urn: 'urn:Belkin:service:timesync:1',
-        action: 'TimeSync',
-        body: [
-            // TODO: Use UTC Timezone
-            UTC: getTime(),
-            TimeZone: '-05.00',
-            dst: 1,
-            DstSupported: 1
-        ],
-        headers: [
-            HOST: getHostAddress()
-        ]
-    )
+    parent.childTimeSyncResponse(device)
 }
 
 def unsubscribe() {
-    log.debug 'Executing unsubscribe()'
-    new hubitat.device.HubAction(
-        method: 'UNSUBSCRIBE',
-        path: '/upnp/event/basicevent1',
-        headers: [
-            HOST: getHostAddress(),
-            SID: "uuid:${getDeviceDataByName('subscriptionId')}"
-        ]
-    )
+    log.debug 'unsubscribe()'
+    parent.childUnsubscribe(device)
 }
 
 def updated() {
@@ -201,57 +146,11 @@ def updated() {
     refresh()
 }
 
-private convertHexToInt(hex) {
-     Integer.parseInt(hex,16)
-}
-
-private convertHexToIP(hex) {
-     [
-        convertHexToInt(hex[0..1]),
-        convertHexToInt(hex[2..3]),
-        convertHexToInt(hex[4..5]),
-        convertHexToInt(hex[6..7])
-    ].join('.')
-}
-
 private createBinaryStateEvent(rawValue) {
-    def value = rawValue == '1' ? 'active' : 'inactive'
+    def value = rawValue == '0' ? 'inactive' : 'active'
     createEvent(
         name: 'motion',
         value: value,
         descriptionText: "Motion is ${value}"
     )
-}
-
-private getCallBackAddress() {
-    def localIp = device.hub.getDataValue('localIP')
-    def localPort = device.hub.getDataValue('localSrvPortTCP')
-    "${localIp}:${localPort}"
-}
-
-private getHostAddress() {
-    def ip = getDataValue('ip')
-    def port = getDataValue('port')
-
-    if (!ip || !port) {
-        def parts = device.deviceNetworkId.split(':')
-        if (parts.length == 2) {
-            ip = parts[0]
-            port = parts[1]
-        } else {
-            log.warn "Can't figure out ip and port for device: ${device.id}"
-        }
-    }
-    log.debug "Using ip: ${ip} and port: ${port} for device: ${device.id}"
-    "${convertHexToIP(ip)}:${convertHexToInt(port)}"
-}
-
-private getTime() {
-    // This is essentially System.currentTimeMillis()/1000, but System is
-    // disallowed by the sandbox.
-    ((new GregorianCalendar().time.time / 1000l).toInteger()).toString()
-}
-
-private getSubscriptionTimeout() {
-    return 60 * (parent.interval?:5)
 }
