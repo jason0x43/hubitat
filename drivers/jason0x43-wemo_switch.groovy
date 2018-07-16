@@ -2,7 +2,7 @@
  * WeMo Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-07-15, 13:54:02-0400
+ * Last updated: 2018-07-15, 22:29:06-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -42,12 +42,12 @@ metadata {
 
 def on() {
     log.debug 'on()'
-    parent.childSetBinaryState(child, '1')
+    parent.childSetBinaryState(device, '1')
 }
 
 def off() {
     log.debug 'off()'
-    parent.childSetBinaryState(child, '0')
+    parent.childSetBinaryState(device, '0')
 }
 
 def parse(description) {

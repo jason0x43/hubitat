@@ -2,7 +2,7 @@
  * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-07-15, 13:53:58-0400
+ * Last updated: 2018-07-15, 22:43:43-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -44,12 +44,12 @@ metadata {
 
 def on() {
     log.debug 'on()'
-    parent.childSetBinaryState(child, '1')
+    parent.childSetBinaryState(device, '1')
 }
 
 def off() {
     log.debug 'off()'
-    parent.childSetBinaryState(child, '0')
+    parent.childSetBinaryState(device, '0')
 }
 
 def parse(description) {
@@ -82,22 +82,20 @@ def parse(description) {
         } else if (body?.Body?.SetBinaryStateResponse?.BinaryState?.text()) {
             def rawValue = body.Body.SetBinaryStateResponse.BinaryState.text()
             log.trace "Got SetBinaryStateResponse = ${rawValue}"
-            result << createBinaryStateEvent(rawValue)
+            result += createStateEvents(rawValue)
         } else if (body?.property?.BinaryState?.text()) {
             def rawValue = body.property.BinaryState.text()
             log.trace "Notify: BinaryState = ${rawValue}"
-            result << createBinaryStateEvent(rawValue)
+            result += createStateEvents(rawValue)
         } else if (body?.property?.TimeZoneNotification?.text()) {
             log.debug "Notify: TimeZoneNotification = ${body.property.TimeZoneNotification.text()}"
         } else if (body?.Body?.GetBinaryStateResponse?.BinaryState?.text()) {
             def rawValue = body.Body.GetBinaryStateResponse.BinaryState.text()
             log.trace "GetBinaryResponse: BinaryState = ${rawValue}"
-            result << createBinaryStateEvent(rawValue)
+            result += createStateEvents(rawValue)
         } else if (body?.Body?.GetInsightParamsResponse?.InsightParams?.text()) {
-            def params = body.Body.GetInsightParamsResponse.InsightParams.text().split("\\|")
-            result << createBinaryStateEvent(params[0])
-            result << createEnergyEvent(params[8])
-            result << createPowerEvent(params[9])
+            def rawValue = body.Body.GetInsightParamsResponse.InsightParams.text()
+            result += createStateEvents(rawValue)
         }
     }
 
@@ -195,4 +193,17 @@ private createPowerEvent(rawValue) {
         value: value,
         descriptionText: "Power is ${value} W"
     )
+}
+
+private createStateEvents(stateString) {
+    def params = stateString.split('\\|')
+    def events = []
+    events << createBinaryStateEvent(params[0])
+    if (params.length > 8) {
+        events << createEnergyEvent(params[8])
+    }
+    if (params.length > 9) {
+        events << createPowerEvent(params[9])
+    }
+    return events
 }
