@@ -2,7 +2,7 @@
  * Scene
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Last updated: 2018-06-03, 16:33:50-0400
+ * Last updated: 2018-08-02, 22:53:18-0400
  * Version: 1.0
  *
  * Based on Scene Machine by Todd Wackford
@@ -32,22 +32,60 @@ preferences {
 
 def mainPage() {
     dynamicPage(name: 'mainPage', uninstall: true, install: true) {
-        section('Name') {
+        section {
+            paragraph(
+                'Create a scene by selecting groups of lights and choosing ' +
+                'how they should be configured.'
+            )
+
+            paragraph(
+                'When a group is turned "on", the color temp OR hue+' +
+                'sat may be set, along with the level. If both the color ' +
+                'temp and hue+sat are configured, color temp will take priority.'
+            )
             label(title: 'Scene name', type: 'string', required: true)
         }
 
         getLightGroups().each {
             def name = it
             def id = name.substring(10)
+
+            // Need to use sprintf when generating property names so they'll be
+            // regular strings
             def state = sprintf('sceneSwitch%s', id)
             def level = sprintf('sceneLevel%s', id)
+            def colorTemperature = sprintf('sceneColorTemperature%s', id)
+            def hue = sprintf('sceneHue%s', id)
+            def saturation = sprintf('sceneSaturation%s', id)
 
             section('Lights') {
-                input(name: name, type: 'capability.switch', multiple: true, submitOnChange: true)
-                input(name: state, title: 'On/off', type: 'bool', submitOnChange: true)
+                input(
+                    name: name,
+                    type: 'capability.switch',
+                    multiple: true,
+                    submitOnChange: true
+                )
 
-                if (settings[state] && supportsLevel(name)) {
-                    input(name: level, title: 'Level', type: 'number')
+                input(
+                    name: state,
+                    title: 'On/off',
+                    type: 'bool',
+                    submitOnChange: true
+                )
+
+                if (settings[state]) {
+                    if (supportsLevel(name)) {
+                        input(name: level, title: 'Level', type: 'number')
+                    }
+
+                    if (supportsColorTemp(name)) {
+                        input(name: colorTemperature, title: 'Color temperature', type: 'number')
+                    }
+
+                    if (supportsColor(name)) {
+                        input(name: hue, title: 'Color hue', type: 'number', range: '0..100')
+                            input(name: saturation, title: 'Color saturation', type: 'number', range: '0..100')
+                    }
                 }
             }
         }
@@ -97,14 +135,30 @@ def setScene(evt) {
             def light = it
             def currentSwitch = light.currentSwitch
 
+            log.trace "state for ${light}: ${state}"
+
             if (state.switch) {
                 if (currentSwitch != 'on') {
                     light.on()
                 }
 
-                def currentLevel = light.currentLevel
-                if (state.level != null && currentLevel != null && state.level != currentLevel) {
+                if (state.level != null && state.hue != null && state.saturation != null) {
+                    light.setColor(hue: state.hue, level: state.level, saturation: state.saturation)
+                }
+                if (state.level != null) {
                     light.setLevel(state.level)
+                }
+
+                if (state.hue != null) {
+                    light.setHue(state.hue)
+                }
+
+                if (state.saturation != null) {
+                    light.setSaturation(state.saturation)
+                }
+
+                if (state.colorTemperature != null) {
+                    light.setColorTemperature(state.colorTemperature)
                 }
             } else if (currentSwitch == 'on') {
                 light.off()
@@ -167,8 +221,23 @@ private getLightState(name) {
     def state = [ switch: settings["sceneSwitch${id}"] ]
     if (state) {
         state.level = settings["sceneLevel${id}"]
+        state.hue = settings["sceneHue${id}"]
+        state.saturation = settings["sceneSaturation${id}"]
+        state.colorTemperature = settings["sceneColorTemperature${id}"]
     }
     return state
+}
+
+private supportsColor(name) {
+    return settings[name].any { 
+        it.supportedCommands.any { it.name == 'setHue' }
+    }
+}
+
+private supportsColorTemp(name) {
+    return settings[name].any { 
+        it.supportedCommands.any { it.name == 'setColorTemperature' }
+    }
 }
 
 private supportsLevel(name) {
