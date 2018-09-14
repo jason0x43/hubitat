@@ -2,7 +2,7 @@
  * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-07-15, 22:43:43-0400
+ * Last updated: 2018-09-14, 08:56:53-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -81,20 +81,21 @@ def parse(description) {
             result << timeSyncResponse()
         } else if (body?.Body?.SetBinaryStateResponse?.BinaryState?.text()) {
             def rawValue = body.Body.SetBinaryStateResponse.BinaryState.text()
-            log.trace "Got SetBinaryStateResponse = ${rawValue}"
+            log.trace "Got SetBinaryStateResponse: ${rawValue}"
             result += createStateEvents(rawValue)
         } else if (body?.property?.BinaryState?.text()) {
             def rawValue = body.property.BinaryState.text()
-            log.trace "Notify: BinaryState = ${rawValue}"
+            log.trace "Got BinaryState notification: ${rawValue}"
             result += createStateEvents(rawValue)
         } else if (body?.property?.TimeZoneNotification?.text()) {
-            log.debug "Notify: TimeZoneNotification = ${body.property.TimeZoneNotification.text()}"
+            log.debug "Got TimeZoneNotification: Response = ${body.property.TimeZoneNotification.text()}"
         } else if (body?.Body?.GetBinaryStateResponse?.BinaryState?.text()) {
             def rawValue = body.Body.GetBinaryStateResponse.BinaryState.text()
-            log.trace "GetBinaryResponse: BinaryState = ${rawValue}"
+            log.trace "Got GetBinaryResponse: ${rawValue}"
             result += createStateEvents(rawValue)
         } else if (body?.Body?.GetInsightParamsResponse?.InsightParams?.text()) {
             def rawValue = body.Body.GetInsightParamsResponse.InsightParams.text()
+            log.trace "Got GetInsightParamsResponse: ${rawValue}"
             result += createStateEvents(rawValue)
         }
     }
@@ -169,6 +170,7 @@ private createBinaryStateEvent(rawValue) {
     //   1: on
     //   8: standby
     // We consider 'standby' to be 'on'.
+    log.trace "Creating binary state event for ${rawValue}"
     def value = rawValue == '0' ? 'off' : 'on';
     createEvent(
         name: 'switch',
@@ -178,6 +180,7 @@ private createBinaryStateEvent(rawValue) {
 }
 
 private createEnergyEvent(rawValue) {
+    log.trace "Creating energy event for ${rawValue}"
     def value = Math.ceil(rawValue.toInteger() / 60000000)
     createEvent(
         name: 'energy',
@@ -187,6 +190,7 @@ private createEnergyEvent(rawValue) {
 }
 
 private createPowerEvent(rawValue) {
+    log.trace "Creating power event for ${rawValue}"
     def value = Math.round(rawValue.toInteger() / 1000)
     createEvent(
         name: 'power',
@@ -199,6 +203,7 @@ private createStateEvents(stateString) {
     def params = stateString.split('\\|')
     def events = []
     events << createBinaryStateEvent(params[0])
+    log.trace "Event params: ${params}"
     if (params.length > 8) {
         events << createEnergyEvent(params[8])
     }
