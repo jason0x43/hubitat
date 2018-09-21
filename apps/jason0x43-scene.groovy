@@ -2,7 +2,7 @@
  * Scene
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Last updated: 2018-08-02, 22:53:18-0400
+ * Last updated: 2018-09-20, 21:57:30-0400
  * Version: 1.0
  *
  * Based on Scene Machine by Todd Wackford
@@ -95,6 +95,15 @@ def mainPage() {
         section('Lights') {
             input (name: name, type: 'capability.switch', multiple: true, submitOnChange: true)
         }
+
+        section('Alternate triggers') {
+            paragraph(
+                'Optionally choose a button and/or momentary switch that can ' +
+                'trigger the scene in addition to the default virtual switch.'
+            )
+            input (name: 'triggerButton', title: 'Button', type: 'capability.pushbutton', submitOnChange: true)
+            input (name: 'triggerSwitch', title: 'Switch', type: 'capability.switch', submitOnChange: true)
+        }
     }
 }
 
@@ -121,6 +130,14 @@ def updated() {
     // Create a switch to activate the scene
     def child = createChildDevice(app.label)
     subscribe(child, 'switch.on', setScene)
+
+    if (triggerButton) {
+        subscribe(triggerButton, 'pushbutton.pushed', setScene)
+    }
+
+    if (triggerSwitch) {
+        subscribe(triggerSwitch, 'switch.on', setScene)
+    }
 }
 
 def setScene(evt) {
