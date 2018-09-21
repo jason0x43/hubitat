@@ -2,7 +2,7 @@
  * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-09-20, 21:27:31-0400
+ * Last updated: 2018-09-21, 17:01:48-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -181,7 +181,7 @@ private createBinaryStateEvent(rawValue) {
 
 private createEnergyEvent(rawValue) {
     log.trace "Creating energy event for ${rawValue}"
-    def value = (rawValue.toDouble() / 60000).round(2)
+    def value = (rawValue.toDouble() / 60000000).round(2)
     createEvent(
         name: 'energy',
         value: value,
@@ -191,7 +191,7 @@ private createEnergyEvent(rawValue) {
 
 private createPowerEvent(rawValue) {
     log.trace "Creating power event for ${rawValue}"
-    def value = Math.round(rawValue.toInteger())
+    def value = Math.round(rawValue.toInteger() / 1000)
     createEvent(
         name: 'power',
         value: value,
