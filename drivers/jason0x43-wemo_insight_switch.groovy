@@ -2,7 +2,7 @@
  * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-09-14, 08:56:53-0400
+ * Last updated: 2018-09-20, 21:27:31-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -181,17 +181,17 @@ private createBinaryStateEvent(rawValue) {
 
 private createEnergyEvent(rawValue) {
     log.trace "Creating energy event for ${rawValue}"
-    def value = Math.ceil(rawValue.toInteger() / 60000000)
+    def value = (rawValue.toDouble() / 60000).round(2)
     createEvent(
         name: 'energy',
         value: value,
-        descriptionText: "Energy is ${value} KWH"
+        descriptionText: "Energy today is ${value} WH"
     )
 }
 
 private createPowerEvent(rawValue) {
     log.trace "Creating power event for ${rawValue}"
-    def value = Math.round(rawValue.toInteger() / 1000)
+    def value = Math.round(rawValue.toInteger())
     createEvent(
         name: 'power',
         value: value,
@@ -199,16 +199,25 @@ private createPowerEvent(rawValue) {
     )
 }
 
+// A state event will probably look like:
+//   8|1536896687|5998|0|249789|1209600|118|190|164773|483265057
+// Fields are:
+//   8            on/off 
+//   1536896687   last changed at (UNIX timestamp)
+//   5998         last on for (seconds?)
+//   0            on today
+//   249789       on total
+//   1209600      window (seconds) over which onTotal is aggregated
+//   110          average power (Watts)
+//   190          current power (Watts?)
+//   164773       energy today (mW mins)
+//   483265057    energy total (mW mins)
 private createStateEvents(stateString) {
     def params = stateString.split('\\|')
+    log.trace "Event params: ${params}"
     def events = []
     events << createBinaryStateEvent(params[0])
-    log.trace "Event params: ${params}"
-    if (params.length > 8) {
-        events << createEnergyEvent(params[8])
-    }
-    if (params.length > 9) {
-        events << createPowerEvent(params[9])
-    }
+    events << createPowerEvent(params[7])
+    events << createEnergyEvent(params[8])
     return events
 }
