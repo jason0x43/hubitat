@@ -16,7 +16,7 @@ metadata {
 
 		attribute 'button2', 'enum', ['released', 'pressed']
 		attribute 'button3', 'enum', ['released', 'pressed']
-		attribute 'numButtons', 'string'
+		attribute 'numberOfButtons', 'number'
 
 		fingerprint(
 			endpointId: '03',
@@ -27,6 +27,22 @@ metadata {
 			outClusters: '01 0006'
 		)
 	}
+
+	preferences {	
+		input(
+			name: 'numberOfButtons',
+			type: 'number',
+			title: 'Number of buttons',
+			required: true
+		)	
+	}
+}
+
+def updated() {
+	sendEvent(
+		name: 'numberOfButtons',
+		value: settings.numberOfButtons
+	)
 }
 
 def parse(description) {
@@ -54,9 +70,6 @@ def refresh() {
 def configure() {
 	log.info 'Configuring...'
 
-	// Set the number of buttons to 3
-	updateState('numButtons', '3')
-
 	def configCmds = [
 		// Switch control
 		"zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}",
@@ -78,7 +91,6 @@ def configure() {
  */
 def updateState(name, value) {
 	state[name] = value
-	device.updateDataValue(name, value)
 }
 
 private parseCatchAllMessage(description) {

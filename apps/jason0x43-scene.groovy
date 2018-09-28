@@ -2,7 +2,7 @@
  * Scene
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Last updated: 2018-09-20, 21:57:30-0400
+ * Last updated: 2018-09-27, 21:47:08-0400
  * Version: 1.0
  *
  * Based on Scene Machine by Todd Wackford
@@ -101,18 +101,36 @@ def mainPage() {
                 'Optionally choose a button and/or momentary switch that can ' +
                 'trigger the scene in addition to the default virtual switch.'
             )
-            input (name: 'triggerButton', title: 'Button', type: 'capability.pushbutton', submitOnChange: true)
-            input (name: 'triggerSwitch', title: 'Switch', type: 'capability.switch', submitOnChange: true)
+            input(
+                name: 'triggerSwitch',
+                title: 'Switch',
+                type: 'capability.switch',
+                submitOnChange: true
+            )
+            input(
+                name: 'triggerButton',
+                title: 'Button device',
+                type: 'capability.pushableButton',
+                submitOnChange: true
+            )
+
+            if (settings.triggerButton != null) {
+                def numButtons = triggerButton.currentNumberOfButtons
+                def options = (1..numButtons).collect { it.toString() }
+                input(
+                    name: 'triggerButtonIndex',
+                    title: 'Which button? (No selection means any button)',
+                    type: 'enum',
+                    options: options
+                )
+            }
         }
     }
 }
 
 def installed() {
     log.debug "Installed with settings: ${settings}"
-
-    // Create a switch to activate the scene
-    def child = createChildDevice(app.label)
-    subscribe(child, 'switch.on', setScene)
+    init()
 }
 
 def uninstalled() {
@@ -126,17 +144,31 @@ def uninstalled() {
 def updated() {
     log.debug "Updated with settings: ${settings}"
     unsubscribe()
-    
+    init()
+}
+
+def init() {
+    log.debug "Initting..."
+
     // Create a switch to activate the scene
     def child = createChildDevice(app.label)
-    subscribe(child, 'switch.on', setScene)
+
+    subscribe(child, 'on', setScene)
+    log.trace "Subscribed to scene switch"
 
     if (triggerButton) {
-        subscribe(triggerButton, 'pushbutton.pushed', setScene)
+        if (triggerButtonIndex != null) {
+            subscribe(triggerButton, "pushed.${triggerButtonIndex}", setScene)
+            log.trace "Subscribed to button ${triggerButtonIndex}"
+        } else {
+            subscribe(triggerButton, 'pushed', setScene)
+            log.trace "Subscribed to all buttons"
+        }
     }
 
     if (triggerSwitch) {
-        subscribe(triggerSwitch, 'switch.on', setScene)
+        subscribe(triggerSwitch, 'on', setScene)
+        log.trace "Subscribed to switch"
     }
 }
 
