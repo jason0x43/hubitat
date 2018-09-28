@@ -2,7 +2,7 @@
  * Scene
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Last updated: 2018-09-27, 21:47:08-0400
+ * Last updated: 2018-09-27, 21:50:43-0400
  * Version: 1.0
  *
  * Based on Scene Machine by Todd Wackford
@@ -116,13 +116,15 @@ def mainPage() {
 
             if (settings.triggerButton != null) {
                 def numButtons = triggerButton.currentNumberOfButtons
-                def options = (1..numButtons).collect { it.toString() }
-                input(
-                    name: 'triggerButtonIndex',
-                    title: 'Which button? (No selection means any button)',
-                    type: 'enum',
-                    options: options
-                )
+                if (numButtons != null) {
+                    def options = (1..numButtons).collect { it.toString() }
+                    input(
+                        name: 'triggerButtonIndex',
+                        title: 'Which button? (No selection means any button)',
+                        type: 'enum',
+                        options: options
+                    )
+                }
             }
         }
     }
