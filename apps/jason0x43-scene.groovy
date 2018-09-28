@@ -2,7 +2,7 @@
  * Scene
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Last updated: 2018-09-28, 13:34:14-0400
+ * Last updated: 2018-09-28, 13:37:49-0400
  * Version: 1.0
  *
  * Based on Scene Machine by Todd Wackford
@@ -123,6 +123,18 @@ def mainPage() {
                         title: 'Which button? (No selection means any button)',
                         type: 'enum',
                         options: options
+                    )
+                } else {
+                    paragraph(
+                        "This switch didn't report a number of buttons. You can " +
+                        'manually enter a numeric index here. If you provide a ' +
+                        'value, the scene will subscribe to that button. If ' +
+                        'not, it will respond to any button press.'
+                    )
+                    input(
+                        name: 'triggerButtonIndex',
+                        title: 'Which button?',
+                        type: 'number'
                     )
                 }
             }
