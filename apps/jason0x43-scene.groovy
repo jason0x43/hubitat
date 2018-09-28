@@ -2,7 +2,7 @@
  * Scene
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Last updated: 2018-09-27, 21:50:43-0400
+ * Last updated: 2018-09-28, 13:34:14-0400
  * Version: 1.0
  *
  * Based on Scene Machine by Todd Wackford
@@ -155,7 +155,7 @@ def init() {
     // Create a switch to activate the scene
     def child = createChildDevice(app.label)
 
-    subscribe(child, 'on', setScene)
+    subscribe(child, 'switch.on', setScene)
     log.trace "Subscribed to scene switch"
 
     if (triggerButton) {
@@ -169,7 +169,7 @@ def init() {
     }
 
     if (triggerSwitch) {
-        subscribe(triggerSwitch, 'on', setScene)
+        subscribe(triggerSwitch, 'switch.on', setScene)
         log.trace "Subscribed to switch"
     }
 }
