@@ -2,7 +2,7 @@
  * Scene
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Last updated: 2018-09-28, 23:16:06-0400
+ * Last updated: 2018-09-28, 23:25:31-0400
  * Version: 1.0
  *
  * Based on Scene Machine by Todd Wackford
@@ -97,8 +97,12 @@ def mainPage() {
         }
 
         section('Button') {
-            paragraph('Optionally choose a button to push when activating the scene')
-            input(name: 'sceneButton', type: 'capability.pushableButton', submitOnChange: true)
+            input(
+                name: 'sceneButton',
+                type: 'capability.pushableButton',
+                title: 'Button device to press when activating scene',
+                submitOnChange: true
+                )
 
             if (settings.sceneButton != null) {
                 def numButtons = sceneButton.currentNumberOfButtons
@@ -106,7 +110,7 @@ def mainPage() {
                     def options = (1..numButtons).collect { it.toString() }
                     input(
                         name: 'sceneButtonIndex',
-                        title: 'Which button? (No selection means any button)',
+                        title: 'Which device button? (No selection means all buttons)',
                         type: 'enum',
                         options: options
                     )
