@@ -2,7 +2,7 @@
  * Scene
  *
  * Author:  Jason Cheatham <j.cheatham@gmail.com>
- * Last updated: 2018-09-28, 13:37:49-0400
+ * Last updated: 2018-09-28, 23:16:06-0400
  * Version: 1.0
  *
  * Based on Scene Machine by Todd Wackford
@@ -93,7 +93,37 @@ def mainPage() {
         def name = sprintf('sceneLight%d', getNextId())
 
         section('Lights') {
-            input (name: name, type: 'capability.switch', multiple: true, submitOnChange: true)
+            input(name: name, type: 'capability.switch', multiple: true, submitOnChange: true)
+        }
+
+        section('Button') {
+            paragraph('Optionally choose a button to push when activating the scene')
+            input(name: 'sceneButton', type: 'capability.pushableButton', submitOnChange: true)
+
+            if (settings.sceneButton != null) {
+                def numButtons = sceneButton.currentNumberOfButtons
+                if (numButtons != null) {
+                    def options = (1..numButtons).collect { it.toString() }
+                    input(
+                        name: 'sceneButtonIndex',
+                        title: 'Which button? (No selection means any button)',
+                        type: 'enum',
+                        options: options
+                    )
+                } else {
+                    paragraph(
+                        "This device didn't report a number of buttons. You can " +
+                        'manually enter a numeric index here. If you provide a ' +
+                        'value, the scene will push that button when activated. If ' +
+                        'not, it will push all the device buttons.'
+                    )
+                    input(
+                        name: 'sceneButtonIndex',
+                        title: 'Which button?',
+                        type: 'number'
+                    )
+                }
+            }
         }
 
         section('Alternate triggers') {
@@ -227,6 +257,15 @@ def setScene(evt) {
                 light.off()
             }
         }
+    }
+
+    if (settings.sceneButton != null) {
+        if (settings.sceneButtonIndex != null) {
+            sceneButton.push(sceneButtonIndex)
+        } else {
+            sceneButton.push()
+        }
+        log.trace 'Pushed scene button'
     }
 
     log.trace 'Done setting scene'
