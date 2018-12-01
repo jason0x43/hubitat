@@ -176,10 +176,16 @@ function processCodeRow(
   row: Cheerio,
   type: ResourceType
 ): CodeResource[] {
-  const id = Number(row.data(`${type}-id`));
+  const id = Number(row.data(`app-id`));
   const link = $(row.find('td')[0]).find('a');
-  const text = type === 'app' ? link.attr('title') : link.text();
-  const [namespace, name] = text.split(':').map(trim);
+  const name = link.text().trim();
+  const namespace = $(row.find('td')[1])
+    .text()
+    .trim();
+
+  if (!id || !name || !namespace) {
+    throw new Error(`Invalid row: ${row}`);
+  }
 
   return [
     {
@@ -249,7 +255,7 @@ function processInstalledRow(
 const tableSelectors = {
   app: '#hubitapps-table tbody .app-row',
   installedapp: '#app-table tbody .app-row',
-  driver: '#devicetype-table tbody .device-row',
+  driver: '#devicetype-table tbody .driver-row',
   device: '#device-table tbody .device-row'
 };
 const rowProcessors = {

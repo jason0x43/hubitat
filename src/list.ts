@@ -10,8 +10,7 @@ import {
   trim
 } from './common';
 import { CommanderStatic } from 'commander';
-
-const Table = require('easy-table');
+import Table from 'easy-table';
 
 let program: CommanderStatic;
 let hubitatHost: string;
@@ -26,58 +25,58 @@ export default function init(context: Context) {
     .command('list <type>')
     .description(`List drivers, apps, or devices on Hubitat`)
     .action(async type => {
-      const rtype = validateType(type);
-      const t = new Table();
+      try {
+        const rtype = validateType(type);
+        const t = new Table();
 
-      if (rtype === 'driver') {
-        const drivers = await listResources(rtype);
-        drivers.forEach(driver => {
-          addCodeRow(t, driver, type ? undefined : rtype);
-        });
-      } else if (rtype === 'app') {
-        const apps = await listResources(rtype);
-        apps.forEach(app => {
-          addCodeRow(t, app, type ? undefined : rtype);
-        });
-      } else if (rtype === 'installedapp') {
-        const apps = await listResources(rtype);
-        apps.forEach(app => {
-          addInstalledRow(t, app);
-        });
-      } else {
-        const devices = await listResources(rtype);
-        devices.forEach(dev => {
-          addDeviceRow(t, dev);
-        });
+        if (rtype === 'driver') {
+          const drivers = await listResources(rtype);
+          drivers.forEach(driver => {
+            addCodeRow(t, driver, type ? undefined : rtype);
+          });
+        } else if (rtype === 'app') {
+          const apps = await listResources(rtype);
+          apps.forEach(app => {
+            addCodeRow(t, app, type ? undefined : rtype);
+          });
+        } else if (rtype === 'installedapp') {
+          const apps = await listResources(rtype);
+          apps.forEach(app => {
+            addInstalledRow(t, app);
+          });
+        } else {
+          const devices = await listResources(rtype);
+          devices.forEach(dev => {
+            addDeviceRow(t, dev);
+          });
+        }
+
+        console.log(trim(t.toString()));
+      } catch (error) {
+        console.error(error);
       }
-
-      console.log(trim(t.toString()));
     });
 
-  function addCodeRow(
-    t: typeof Table,
-    resource: CodeResource,
-    type?: ResourceType
-  ) {
+  function addCodeRow(t: Table, resource: CodeResource, type?: ResourceType) {
     if (type) {
       t.cell('type', type);
     }
     t.cell('id', resource.id, Table.number());
-    t.cell('name', resource.name, Table.string());
+    t.cell('name', resource.name, Table.string);
     t.newRow();
   }
 
-  function addInstalledRow(t: typeof Table, resource: InstalledResource) {
+  function addInstalledRow(t: Table, resource: InstalledResource) {
     t.cell('id', resource.id, Table.number());
-    t.cell('name', resource.name, Table.string());
-    t.cell('app', resource.app, Table.string());
+    t.cell('name', resource.name, Table.string);
+    t.cell('app', resource.app, Table.string);
     t.newRow();
   }
 
-  function addDeviceRow(t: typeof Table, resource: DeviceResource) {
+  function addDeviceRow(t: Table, resource: DeviceResource) {
     t.cell('id', resource.id, Table.number());
-    t.cell('name', resource.name, Table.string());
-    t.cell('driver', resource.driver, Table.string());
+    t.cell('name', resource.name, Table.string);
+    t.cell('driver', resource.driver, Table.string);
     t.newRow();
   }
 }

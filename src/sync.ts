@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename, join, relative } from 'path';
 import { createHash } from 'crypto';
-import * as cheerio from 'cheerio';
+import cheerio from 'cheerio';
 import { execSync } from 'child_process';
 import fetch from 'node-fetch';
 import {
@@ -49,8 +49,10 @@ export default function init(context: Context) {
       }
 
       let filename: string;
+      let isGithubResource = false;
 
       if (/^git:/.test(path)) {
+        isGithubResource = true;
         const gitPath = path.slice(4);
         const parts = gitPath.split('/');
         const orgPath = join(repoDir, parts[0]);
@@ -72,7 +74,12 @@ export default function init(context: Context) {
         const localManifest = loadManifest();
 
         console.log(`Installing ${filename}...`);
-        await createRemoteResource(rtype, filename, localManifest);
+        await createRemoteResource(
+          rtype,
+          filename,
+          localManifest,
+          isGithubResource
+        );
         saveManifest(localManifest);
       } catch (error) {
         die(error);
@@ -250,13 +257,21 @@ async function getRemoteManifest(type?: CodeResourceType): Promise<Manifest> {
   };
 
   if (type) {
+    console.log(`Loading remote manifest for ${type}s...`);
     const resources = await getFileResources(type);
     manifest[type] = toManifestSection(resources);
+    console.log(`Loaded ${Object.keys(resources).length} entries`);
   } else {
+    console.log('Loading remote manifest for all resource types...');
     const apps = await getFileResources('app');
+    const numApps = Object.keys(apps).length;
     manifest.app = toManifestSection(apps);
+    console.log(`Loaded ${numApps} app${numApps === 1 ? '' : 's'}`);
+
     const drivers = await getFileResources('driver');
+    const numDrivers = Object.keys(drivers).length;
     manifest.driver = toManifestSection(drivers);
+    console.log(`Loaded ${numDrivers} driver${numDrivers === 1 ? '' : 's'}`);
   }
 
   return manifest;
@@ -333,12 +348,20 @@ async function updateRemoteResource(
   const localRes = localManifest[type][id];
   const remoteRes = remoteManifest[type][id];
   const filename = localRes.filename;
+  const name = basename(filename);
   let source: string;
+
+  if (!remoteManifest[type][id]) {
+    const capType = `${type[0].toUpperCase()}${type.slice(1)}`;
+    console.error(
+      `${capType} ${name} does not exist in remote manifest; ignoring`
+    );
+    return false;
+  }
 
   try {
     if (filename.indexOf(repoDir) === 0) {
       const repo = join(...filename.split('/').slice(0, 3));
-      console.log(`Updating github resource ${basename(filename)}`);
       execSync('git pull', { cwd: repo });
       source = readFileSync(filename, {
         encoding: 'utf8'
@@ -381,8 +404,12 @@ async function updateRemoteResource(
     };
     localManifest[type][res.id] = toManifestEntry(newResource);
   } catch (error) {
-    console.log(`No local script ${filename}, removing from manifest`);
-    delete localManifest[type][id];
+    if (error.code === 'ENOENT') {
+      console.log(`No local script ${filename}`);
+      // console.log(`No local script ${filename}, removing from manifest`);
+      // delete localManifest[type][id];
+    }
+    console.error(error);
   }
 
   return true;
@@ -428,6 +455,9 @@ function toManifestEntry(resource: ManifestEntry) {
  */
 function getFilename(resource: CodeResource) {
   const { name, namespace } = resource;
+  if (!name) {
+    throw new Error(`Empty name for ${JSON.stringify(resource)}`);
+  }
   return `${namespace}-${name!.toLowerCase().replace(/\s/g, '_')}.groovy`;
 }
 
@@ -463,7 +493,7 @@ async function getResource(
   if (response.status !== 200) {
     throw new Error(`Error getting ${type} ${id}: ${response.statusText}`);
   }
-  return await response.json<ResponseResource>();
+  return <Promise<ResponseResource>>response.json();
 }
 
 /**
@@ -523,7 +553,7 @@ async function putResource(
   if (response.status !== 200) {
     throw new Error(`Error putting ${type} ${id}: ${response.statusText}`);
   }
-  return response.json<ResponseResource>();
+  return <Promise<ResponseResource>>response.json();
 }
 
 /**

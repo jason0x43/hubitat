@@ -1,4 +1,4 @@
-import * as WebSocket from 'ws';
+import WebSocket from 'ws';
 import { Context, die, validateId } from './common';
 import { XmlEntities } from 'html-entities';
 
