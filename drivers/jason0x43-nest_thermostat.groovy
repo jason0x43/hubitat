@@ -2,7 +2,7 @@
  * A simple Nest thermostat driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-04-13, 13:06 ET
+ * Last updated: 2018-12-01, 22:45:07-0500
  */
 
 metadata {
@@ -234,6 +234,8 @@ private updateState(args) {
 	def scale = data.temperature_scale.toLowerCase()
 	def away = parent.isAway()
 
+	log.trace "data: ${data}"
+
 	sendEvent(name: 'away', value: away)
 	sendEvent(name: 'thermostatMode', value: data.hvac_mode)
 	sendEvent(name: 'humidity', value: data.humidity)
@@ -244,6 +246,13 @@ private updateState(args) {
 	sendEvent(name: 'scale', value: scale)
 	sendEvent(name: 'sunblockEnabled', value: data.sunlight_correction_enabled)
 	sendEvent(name: 'sunblockActive', value: data.sunlight_correction_active)
+	sendEvent(name: 'temperature', value: data["ambient_temperature_${scale}"])
+	sendEvent(name: 'temperatureUnit', value: data.temperature_scale)
+	sendEvent(name: 'nestPresence', value: away ? 'away' : 'home')
+	sendEvent(name: 'hasLeaf', value: data.has_leaf)
+
+	def state = data.hvac_state == 'off' ? 'idle' : data.hvac_state
+	sendEvent(name: 'thermostatOperatingState', value: state)
 
 	log.trace "thermostatMode: ${data.hvac_mode}"
 
