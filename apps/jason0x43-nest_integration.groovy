@@ -2,7 +2,7 @@
  * Manager app for Nest thermostat
  *
  * Author: Jason Cheatham
- * Last updated: 2018-12-03, 08:55:29-0500
+ * Last updated: 2018-12-03, 08:56:22-0500
  *
  * To use this app you first need to create an OAuth client on
  * https://developers.nest.com.  The properties should look like:
@@ -188,8 +188,8 @@ def authStartPage() {
             href(
                 'authorizeApp',
                 title: 'Authorize',
-                description: 'Right click here and open the Nest authorization page in a new ' +
-                    'tab to obtain a PIN, then enter it below',
+                description: 'Click here to open the Nest authorization page in a new ' +
+                    'tab. Obtain a PIN, then enter it below',
                 style: 'external',
                 url: uri
             )
