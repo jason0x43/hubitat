@@ -2,7 +2,7 @@
  * A simple Nest thermostat driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-12-01, 22:45:07-0500
+ * Last updated: 2018-12-03, 08:45:29-0500
  */
 
 metadata {
@@ -151,17 +151,17 @@ def sunblockOn() {
 def updated() {
 	log.debug 'Updated'
 
-	log.trace('Unscheduling poll timer')
+	// log.trace('Unscheduling poll timer')
 	unschedule()
 
 	if (pollInterval == '5') {
-		log.trace "Polling every 5 minutes"
+		// log.trace "Polling every 5 minutes"
 		runEvery5Minutes(refresh)
 	} else if (pollInterval == '10') {
-		log.trace "Polling every 10 minutes"
+		// log.trace "Polling every 10 minutes"
 		runEvery10Minutes(refresh)
 	} else if (pollInterval == '30') {
-		log.trace "Polling every 30 minutes"
+		// log.trace "Polling every 30 minutes"
 		runEvery30Minutes(refresh)
 	}
 }
@@ -223,7 +223,7 @@ private updateState(args) {
 		) &&
 		args.triesLeft > 0
 	) {
-		log.trace "Device hasn't updated for away yet, retrying"
+		// log.trace "Device hasn't updated for away yet, retrying"
 		runIn(3, 'updateState', [data: [
 			away: args.away,
 			triesLeft: args.triesLeft - 1
@@ -234,7 +234,7 @@ private updateState(args) {
 	def scale = data.temperature_scale.toLowerCase()
 	def away = parent.isAway()
 
-	log.trace "data: ${data}"
+	// log.trace "data: ${data}"
 
 	sendEvent(name: 'away', value: away)
 	sendEvent(name: 'thermostatMode', value: data.hvac_mode)
@@ -254,13 +254,13 @@ private updateState(args) {
 	def state = data.hvac_state == 'off' ? 'idle' : data.hvac_state
 	sendEvent(name: 'thermostatOperatingState', value: state)
 
-	log.trace "thermostatMode: ${data.hvac_mode}"
+	// log.trace "thermostatMode: ${data.hvac_mode}"
 
 	if (data.hvac_mode == 'heat') {
-		log.trace 'setting heating setpoint to ' + data["target_temperature_${scale}"]
+		// log.trace 'setting heating setpoint to ' + data["target_temperature_${scale}"]
 		sendEvent(name: 'heatingSetpoint', value: data["target_temperature_${scale}"])
 	} else if (data.hvac_mode == 'cool') {
-		log.trace 'setting cooling setpoint to ' + data["target_temperature_${scale}"]
+		// log.trace 'setting cooling setpoint to ' + data["target_temperature_${scale}"]
 		sendEvent(name: 'coolingSetpoint', value: data["target_temperature_${scale}"])
 	} else if (data.hvac_mode == 'eco') {
 		sendEvent(name: 'heatingSetpoint', value: data["eco_temperature_low_${scale}"])

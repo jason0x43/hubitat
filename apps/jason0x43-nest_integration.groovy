@@ -2,7 +2,7 @@
  * Manager app for Nest thermostat
  *
  * Author: Jason Cheatham
- * Last updated: 2018-12-01, 17:06:50-0500
+ * Last updated: 2018-12-03, 08:55:29-0500
  *
  * To use this app you first need to create an OAuth client on
  * https://developers.nest.com.  The properties should look like:
@@ -260,7 +260,7 @@ def initialize() {
         def label = "Nest: ${state.thermostatNames[id]}"
 
         if (!d) {
-            log.trace 'Adding device for thermostat ' + dni
+            // log.trace 'Adding device for thermostat ' + dni
             addChildDevice(
                 'jason0x43',
                 'Nest Thermostat',
@@ -275,7 +275,7 @@ def initialize() {
                 ]
             )
         } else {
-            log.trace "Updating thermostat ${dni} with label ${label} and id ${id}"
+            // log.trace "Updating thermostat ${dni} with label ${label} and id ${id}"
             d.label = label
             d.updateDataValue('nestId', id)
             d
@@ -285,7 +285,7 @@ def initialize() {
     unsubscribe()
 
     if (settings.watchMode) {
-        log.trace 'Subscribing to mode changes'
+        // log.trace 'Subscribing to mode changes'
         subscribe(location, 'mode', handleModeChange)
         // Update the away state based on the current mode
         handleModeChange([value: location.mode])
@@ -293,14 +293,14 @@ def initialize() {
 }
 
 def handleModeChange(event) {
-    log.trace "Handling mode change to ${event.value}"
+    // log.trace "Handling mode change to ${event.value}"
     def mode = event.value
     def away = mode == 'Away'
     if (away != isAway()) {
-        log.trace "Saw mode change to '${event.value}', updating Nest presence"
+        // log.trace "Saw mode change to '${event.value}', updating Nest presence"
         setAway(away)
         settings.thermostats.each { id ->
-            log.trace "Refreshing thermostat ${id}"
+            // log.trace "Refreshing thermostat ${id}"
             def dni = "${app.id}.${id}"
             def d = getChildDevice(dni)
             d.refresh(away)
@@ -327,7 +327,7 @@ def setAway(isAway) {
 def nestGet(path) {
     def responseData
 
-    log.trace "Getting ${path} from Nest"
+    // log.trace "Getting ${path} from Nest"
 
     httpGet(
         uri: 'https://developer-api.nest.com',
@@ -350,7 +350,7 @@ def nestPut(path, data) {
     def json = new groovy.json.JsonBuilder(data).toString()
     def token = state.accessToken
 
-    log.trace "Putting ${json} to ${path}"
+    // log.trace "Putting ${json} to ${path}"
 
     httpPutJson(
         uri: 'https://developer-api.nest.com',
@@ -362,7 +362,7 @@ def nestPut(path, data) {
     ) { resp ->
         if (resp.status == 307) {
             def location = resp.headers.Location
-            log.trace "Redirected to ${location}"
+            // log.trace "Redirected to ${location}"
             httpPutJson(
                 uri: location,
                 body: json,
@@ -393,7 +393,7 @@ private getStructures() {
         state.structureData = structures;
         state.numStructures = structures.size()
 
-        log.trace "Found ${state.numStructures} structures"
+        // log.trace "Found ${state.numStructures} structures"
 
         structures.each { id, st ->
             names[id] = st.name
@@ -419,7 +419,7 @@ private getThermostats() {
         state.thermostatData = devices;
         state.numThermostats = devices.size()
 
-        log.trace "Found ${state.numThermostats} thermostats"
+        // log.trace "Found ${state.numThermostats} thermostats"
         def structureId = settings.structure
 
         devices.findAll { id, therm ->
@@ -436,9 +436,9 @@ private getThermostats() {
 }
 
 private isAuthorized() {
-    log.trace "Is authorized? token=${state.accessToken}"
+    // log.trace "Is authorized? token=${state.accessToken}"
     if (state.accessToken == null) {
-        log.trace "No token"
+        // log.trace "No token"
         return false
     }
 
