@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2018-07-15, 12:03:33-0400
+ * Last updated: 2019-01-08, 20:42:36-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -60,7 +60,7 @@ def mainPage() {
         title: 'Device discovery started!',
         install: true,
         uninstall: true,
-        refreshInterval: 5
+        refreshInterval: 30
     ) {
         section('') {
             input(
