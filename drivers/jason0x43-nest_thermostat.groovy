@@ -2,7 +2,7 @@
  * A simple Nest thermostat driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-12-03, 08:45:29-0500
+ * Last updated: 2018-12-13, 08:23:39-0500
  */
 
 metadata {
@@ -212,6 +212,11 @@ private setTargetTemp(temp, heatOrCool) {
 private updateState(args) {
 	def id = getDataValue('nestId')
 	def data = parent.nestGet("/devices/thermostats/${id}")
+
+	if (data == null) {
+		log.error 'Got null data from parent'
+		return
+	}
 
 	// If the thermostat mode doesn't agree with the 'away' state, wait a few
 	// seconds and update again

@@ -2,7 +2,7 @@
  * Manager app for Nest thermostat
  *
  * Author: Jason Cheatham
- * Last updated: 2018-12-03, 08:56:22-0500
+ * Last updated: 2018-12-13, 08:29:11-0500
  *
  * To use this app you first need to create an OAuth client on
  * https://developers.nest.com.  The properties should look like:
@@ -329,17 +329,26 @@ def nestGet(path) {
 
     // log.trace "Getting ${path} from Nest"
 
-    httpGet(
-        uri: 'https://developer-api.nest.com',
-        path: path,
-        headers: [
-            Authorization: "Bearer ${state.accessToken}"
-        ]
-    ) { resp ->
-        responseData = resp.data
-    }
+    try {
+        httpGet(
+            uri: 'https://developer-api.nest.com',
+            path: path,
+            headers: [
+                Authorization: "Bearer ${state.accessToken}"
+            ]
+        ) { resp ->
+            responseData = resp.data
+        }
 
-    return responseData
+        return responseData
+    } catch (error) {
+        // A request was unauthorized, the token is no longer good
+        if (error.toString() =~ /Unauthorized/) {
+            disconnect()
+        }
+
+        throw error;
+    }
 }
 
 /**
