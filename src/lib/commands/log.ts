@@ -1,18 +1,20 @@
-import WebSocket from 'ws';
-import { Context, die, validateId } from './common';
 import { XmlEntities } from 'html-entities';
+import { CommanderStatic } from 'commander';
+import WebSocket from 'ws';
+
+import { die } from '../common';
+import { getHost } from '../request';
+import { validateId } from '../resource';
 
 // Setup cli ------------------------------------------------------------------
 
-export default function init(context: Context) {
-  const { program, hubitatHost } = context;
-
+export default function init(program: CommanderStatic) {
   program
     .command('log [type] [id]')
     .description(
       'Log events for a given source, type of source, or all sources'
     )
-    .action((type?: string, id?: string) => {
+    .action((type: string, id?: string) => {
       const _type = validateType(type);
       const _id = validateId(id);
 
@@ -20,7 +22,7 @@ export default function init(context: Context) {
         die('An ID requires a type');
       }
 
-      const ws = new WebSocket(`ws://${hubitatHost}/logsocket`);
+      const ws = new WebSocket(`ws://${getHost()}/logsocket`);
       const entities = new XmlEntities();
 
       ws.on('open', () => {
@@ -47,10 +49,7 @@ function logMessage(entities: TextConverter, message: Message) {
   );
 }
 
-function validateType(type?: string) {
-  if (!type) {
-    return type;
-  }
+function validateType(type: string): 'app' | 'dev' {
   if (/apps?/.test(type)) {
     return 'app';
   }
@@ -58,6 +57,7 @@ function validateType(type?: string) {
     return 'dev';
   }
   die('Type should be "app" or "dev"');
+  return <any>'';
 }
 
 interface Message {

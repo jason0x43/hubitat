@@ -1,56 +1,71 @@
-import { CommanderStatic } from 'commander';
-import fetch from 'node-fetch';
+import { join, relative } from 'path';
+import { createHash } from 'crypto';
 import * as cheerio from 'cheerio';
 
-export interface Context {
-  hubitatHost: string;
-  program: CommanderStatic;
-}
+import { die, simpleEncode } from './common';
+import { hubitatFetch } from './request';
+
+export type CodeResourceType = 'app' | 'driver';
+
+export const resourceDirs = {
+  app: relative(process.cwd(), join(__dirname, '..', 'apps')),
+  driver: relative(process.cwd(), join(__dirname, '..', 'drivers'))
+};
 
 /**
- * Display a message and quit
+ * Get a filename for a resource
  */
-export function die(message: string | Error) {
-  if (typeof message === 'string') {
-    console.error(`\n  error: ${message}\n`);
-  } else {
-    const lines = message.stack!.split('\n');
-    console.error(`\n  ${lines.join('\n  ')}\n`);
+export function getFilename(resource: CodeResource) {
+  const { name, namespace } = resource;
+  if (!name) {
+    throw new Error(`Empty name for ${JSON.stringify(resource)}`);
   }
-  process.exit(1);
-}
-
-/**
- * Debug log
- */
-export function createLogger(program: CommanderStatic): Logger {
-  if (program.verbose) {
-    return console.log;
-  } else {
-    return (..._args: any[]) => {};
-  }
+  return `${namespace}-${name!.toLowerCase().replace(/\s/g, '_')}.groovy`;
 }
 
 /**
  * Get a resource list from Hubitat
  */
+export async function getFileResources(
+  type: CodeResourceType
+): Promise<FileResource[]> {
+  const resources = await getResources(type);
+
+  return Promise.all(
+    resources.map(async res => {
+      const { id } = res;
+      const filename = getFilename(res);
+      const item = await getResource(type, Number(id));
+      const hash = hashSource(item.source);
+      return { filename, hash, type, ...item };
+    })
+  );
+}
+
+/**
+ * Retrieve a specific resource (driver or app)
+ */
+export async function getResource(
+  type: ResourceType,
+  id: number
+): Promise<ResponseResource> {
+  const response = await hubitatFetch(`/${type}/ajax/code?id=${id}`);
+  if (response.status !== 200) {
+    throw new Error(`Error getting ${type} ${id}: ${response.statusText}`);
+  }
+  return <Promise<ResponseResource>>response.json();
+}
+
+/**
+ * Get a resource list from Hubitat
+ */
+export async function getResources(type: 'device'): Promise<DeviceResource[]>;
 export async function getResources(
-  hubitatHost: string,
-  type: 'device'
-): Promise<DeviceResource[]>;
-export async function getResources(
-  hubitatHost: string,
   type: 'app' | 'driver'
 ): Promise<CodeResource[]>;
-export async function getResources(
-  hubitatHost: string,
-  type: ResourceType
-): Promise<Resource[]>;
-export async function getResources(
-  hubitatHost: string,
-  type: ResourceType
-): Promise<Resource[]> {
-  const response = await fetch(`http://${hubitatHost}/${type}/list`);
+export async function getResources(type: ResourceType): Promise<Resource[]>;
+export async function getResources(type: ResourceType): Promise<Resource[]> {
+  const response = await hubitatFetch(`/${type}/list`);
   const html = await response.text();
   const $ = cheerio.load(html);
   const selector = tableSelectors[type];
@@ -68,31 +83,33 @@ export async function getResources(
 }
 
 /**
- * Encode a JS object to x-www-form-urlencoded format
+ * Generate a SHA512 hash of a source string
  */
-export function simpleEncode(value: any, key?: string, list?: string[]) {
-  list = list || [];
-  if (typeof value === 'object') {
-    for (let k in value) {
-      simpleEncode(value[k], key ? `${key}[${k}]` : k, list);
-    }
-  } else {
-    list.push(`${key}=${encodeURIComponent(value)}`);
-  }
-  return list.join('&');
+export function hashSource(source: string) {
+  const hash = createHash('sha512');
+  hash.update(source);
+  return hash.digest('hex');
 }
 
 /**
- * Trim whitespace from either end of a string
+ * Store a specific resource (driver or app)
  */
-export function trim(str?: string) {
-  if (!str) {
-    return str;
+export async function putResource(
+  type: ResourceType,
+  id: number,
+  version: number,
+  source: string
+): Promise<ResponseResource> {
+  const response = await hubitatFetch(`/${type}/ajax/update`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: simpleEncode({ id, version, source })
+  });
+  if (response.status !== 200) {
+    throw new Error(`Error putting ${type} ${id}: ${response.statusText}`);
   }
-  return str.replace(/^\s+/, '').replace(/\s+$/, '');
+  return <Promise<ResponseResource>>response.json();
 }
-
-export type CodeResourceType = 'app' | 'driver';
 
 /**
  * Validate a code type argument.
@@ -144,10 +161,6 @@ export function validateType(type: string): ResourceType {
   return <ResourceType>'';
 }
 
-export interface Logger {
-  (...args: any[]): void;
-}
-
 export interface Resource {
   id: number;
   name: string;
@@ -170,6 +183,20 @@ export interface DeviceResource extends Resource {
 export type SourceType = 'System' | 'User';
 
 export type ResourceType = 'driver' | 'app' | 'device' | 'installedapp';
+
+export interface ResponseResource {
+  id: number;
+  version: number;
+  source: string;
+  status: string;
+  errorMessage?: string;
+}
+
+export interface FileResource extends ResponseResource {
+  filename: string;
+  hash: string;
+  type: ResourceType;
+}
 
 function processCodeRow(
   $: CheerioStatic,

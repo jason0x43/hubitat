@@ -1,26 +1,19 @@
+import { trim } from '../common';
 import {
-  Context,
   validateType,
   ResourceType,
   Resource,
   InstalledResource,
   DeviceResource,
   CodeResource,
-  getResources,
-  trim
-} from './common';
+  getResources
+} from '../resource';
 import { CommanderStatic } from 'commander';
 import Table from 'easy-table';
 
-let program: CommanderStatic;
-let hubitatHost: string;
-
 // Setup cli ------------------------------------------------------------------
 
-export default function init(context: Context) {
-  program = context.program;
-  hubitatHost = context.hubitatHost;
-
+export default function init(program: CommanderStatic) {
   program
     .command('list <type>')
     .description(`List drivers, apps, or devices on Hubitat`)
@@ -92,6 +85,6 @@ async function listResources(
 ): Promise<InstalledResource[]>;
 async function listResources(resource: ResourceType): Promise<CodeResource[]>;
 async function listResources(resource: ResourceType): Promise<Resource[]> {
-  const resources = await getResources(hubitatHost, resource);
+  const resources = await getResources(resource);
   return resources;
 }

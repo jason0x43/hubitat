@@ -3,7 +3,7 @@
 set -e
 
 needsRebuild() {
-	for ts in src/*.ts; do
+	for ts in src/**/*.ts; do
 		js="${ts%.*}.js"
 		if [[ ! -f $js || $ts -nt $js ]]; then
 			echo 'rebuild'
@@ -19,11 +19,12 @@ if [[ ! -d 'src/node_modules' ]]; then
 	cd ..
 fi
 
-if [[ ! -f src/index.js || -n $(needsRebuild) ]]; then
+if [[ -n $(needsRebuild) ]]; then
 	echo 'Building the script...'
 	cd src
 	npm run build
 	cd ..
 fi
 
-node src/index.js $*
+# Use --no-warnings to suppress the fs.promises ExperimentalWarning
+node --no-warnings src/index.js $*

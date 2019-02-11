@@ -1,17 +1,11 @@
 import { CommanderStatic } from 'commander';
 import * as cheerio from 'cheerio';
-import fetch from 'node-fetch';
-import { Context, die } from './common';
-
-let program: CommanderStatic;
-let hubitatHost: string;
+import { die } from '../common';
+import { hubitatFetch } from '../request';
 
 // Setup cli ------------------------------------------------------------------
 
-export default function init(context: Context) {
-  program = context.program;
-  hubitatHost = context.hubitatHost;
-
+export default function init(program: CommanderStatic) {
   program
     .command('info <id>')
     .description('Show information about a specific device')
@@ -29,7 +23,7 @@ export default function init(context: Context) {
  * Retrieve a specific device
  */
 async function getDevice(id: number): Promise<DeviceInfo> {
-  const response = await fetch(`http://${hubitatHost}/device/edit/${id}`);
+  const response = await hubitatFetch(`/device/edit/${id}`);
   if (response.status !== 200) {
     throw new Error(`Error getting device ${id}: ${response.statusText}`);
   }

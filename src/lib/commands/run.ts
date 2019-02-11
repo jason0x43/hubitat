@@ -1,16 +1,12 @@
 import { CommanderStatic } from 'commander';
-import fetch from 'node-fetch';
-import { Context, die, simpleEncode, validateId } from './common';
 
-let program: CommanderStatic;
-let hubitatHost: string;
+import { die, simpleEncode } from '../common';
+import { hubitatFetch } from '../request';
+import { validateId } from '../resource';
 
 // Setup cli ------------------------------------------------------------------
 
-export default function init(context: Context) {
-  program = context.program;
-  hubitatHost = context.hubitatHost;
-
+export default function init(program: CommanderStatic) {
   program
     .command('run <id> <command> [args...]')
     .description('Run a command on a device')
@@ -35,7 +31,7 @@ async function runCommand(id: number, command: string, args: string[]) {
     });
   }
 
-  const response = await fetch(`http://${hubitatHost}/device/runmethod`, {
+  const response = await hubitatFetch(`/device/runmethod`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: simpleEncode(body)
