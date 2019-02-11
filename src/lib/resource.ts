@@ -230,14 +230,17 @@ function processDeviceRow(
   type: ResourceType
 ): DeviceResource[] {
   const id = Number(row.data(`${type}-id`));
-  const link = $(row.find('td')[0]).find('a');
-  const driver = <SourceType>$(row.find('td')[1])
+  const name = <SourceType>$(row.find('td')[1])
+    .text()
+    .trim()
+    .split('\n')[0]
+    .trim();
+  const driver = $(row.find('td')[2])
     .text()
     .trim();
-  const source = <SourceType>$(row.find('td')[2])
+  const source = <SourceType>$(row.find('td')[3])
     .text()
     .trim();
-  const name = link.text().trim();
 
   return [
     {

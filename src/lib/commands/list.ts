@@ -24,24 +24,19 @@ export default function init(program: CommanderStatic) {
 
         if (rtype === 'driver') {
           const drivers = await listResources(rtype);
-          drivers.forEach(driver => {
-            addCodeRow(t, driver, type ? undefined : rtype);
-          });
+          drivers.forEach(driver =>
+            addCodeRow(t, driver, type ? undefined : rtype)
+          );
         } else if (rtype === 'app') {
           const apps = await listResources(rtype);
-          apps.forEach(app => {
-            addCodeRow(t, app, type ? undefined : rtype);
-          });
+          apps.forEach(app => addCodeRow(t, app, type ? undefined : rtype));
         } else if (rtype === 'installedapp') {
           const apps = await listResources(rtype);
-          apps.forEach(app => {
-            addInstalledRow(t, app);
-          });
+          apps.forEach(app => addInstalledRow(t, app));
         } else {
           const devices = await listResources(rtype);
-          devices.forEach(dev => {
-            addDeviceRow(t, dev);
-          });
+          console.log(devices);
+          devices.forEach(dev => addDeviceRow(t, dev));
         }
 
         console.log(trim(t.toString()));
@@ -85,6 +80,5 @@ async function listResources(
 ): Promise<InstalledResource[]>;
 async function listResources(resource: ResourceType): Promise<CodeResource[]>;
 async function listResources(resource: ResourceType): Promise<Resource[]> {
-  const resources = await getResources(resource);
-  return resources;
+  return await getResources(resource);
 }
