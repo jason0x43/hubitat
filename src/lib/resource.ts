@@ -259,11 +259,11 @@ function processInstalledRow(
   type: ResourceType
 ): InstalledResource[] {
   const apps: InstalledResource[] = [];
-
   const nameCell = $(row.find('td')[0]);
-  const names = nameCell.find('a:first-child');
+  const names = nameCell.find('.app-row-link a, .app-row-link-child a');
   const typeCell = $(row.find('td')[1]);
   const types = typeCell.find('div,li');
+
   names.each((i, link) => {
     const name = $(link)
       .text()
