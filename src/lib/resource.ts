@@ -144,16 +144,16 @@ export function validateId(value?: string) {
  * Verify that a type variable is a ResourceType
  */
 export function validateType(type: string): ResourceType {
-  if (/apps?/.test(type)) {
+  if ('apps'.startsWith(type)) {
     return 'app';
   }
-  if (/drivers?/.test(type)) {
+  if ('drivers'.startsWith(type)) {
     return 'driver';
   }
-  if (/devices?/.test(type)) {
+  if ('devices'.startsWith(type)) {
     return 'device';
   }
-  if (/installed(app)?/.test(type)) {
+  if ('installedapp'.startsWith(type)) {
     return 'installedapp';
   }
 
