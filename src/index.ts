@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
+require('source-map-support').install();
+require('dotenv-safe').config();
+
 import program from 'commander';
 
-import { setHost } from './lib/request';
 import initPush from './lib/commands/push';
 import initPull from './lib/commands/pull';
 import initInstall from './lib/commands/install';
@@ -11,12 +13,7 @@ import initList from './lib/commands/list';
 import initInfo from './lib/commands/info';
 import initRun from './lib/commands/run';
 
-require('source-map-support').install();
-require('dotenv-safe').config();
-
 program.description('Interact with hubitat').option('-v, --verbose');
-
-setHost(process.env.HUBITAT_HOST!);
 
 initInstall(program);
 initPush(program);

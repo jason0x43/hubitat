@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-let hubitatHost: string;
+const hubitatHost = process.env.HUBITAT_HOST!;
 
 export function hubitatFetch(path: string, init?: fetch.RequestInit) {
   return fetch(`http://${hubitatHost}${path}`, init);
@@ -8,8 +8,4 @@ export function hubitatFetch(path: string, init?: fetch.RequestInit) {
 
 export function getHost() {
   return hubitatHost;
-}
-
-export function setHost(host: string) {
-  hubitatHost = host;
 }
