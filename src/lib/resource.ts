@@ -176,7 +176,7 @@ export interface InstalledResource extends Resource {
 }
 
 export interface DeviceResource extends Resource {
-  source: SourceType;
+  source?: SourceType;
   driver: string;
 }
 

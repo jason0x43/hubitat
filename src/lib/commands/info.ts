@@ -1,7 +1,6 @@
 import { CommanderStatic } from 'commander';
-import * as cheerio from 'cheerio';
 import { die } from '../common';
-import { hubitatFetch } from '../request';
+import { makerFetch } from '../request';
 
 // Setup cli ------------------------------------------------------------------
 
@@ -23,56 +22,72 @@ export default function init(program: CommanderStatic) {
  * Retrieve a specific device
  */
 async function getDevice(id: number): Promise<DeviceInfo> {
-  const response = await hubitatFetch(`/device/edit/${id}`);
-  if (response.status !== 200) {
-    throw new Error(`Error getting device ${id}: ${response.statusText}`);
-  }
-  const html = await response.text();
-  const $ = cheerio.load(html);
-  const name = $('h1').text();
+  const infoResponse = await makerFetch(`/devices/${id}`);
+  const infoObj: MakerDeviceInfo = await infoResponse.json();
 
-  const script = $('.panel-body script').filter((_i, script) => {
-    const text = $(script).html()!;
-    return text ? text.indexOf('var currentStates =') !== -1 : false;
-  })[0];
-
-  const text = $(script).html()!;
-  const match = /var currentStates =\s*(\{.*?\});/.exec(text)!;
-  const value = match[1];
-  const obj = JSON.parse(value);
-  const deviceTypeId = obj.deviceTypeId;
-
-  const currentStates = obj.currentStates;
-  const states: { [name: string]: string } = {};
-  Object.keys(currentStates).forEach(key => {
-    const val = currentStates[key];
-    states[key] = val.dataType === 'NUMBER' ? val.jsonValue : val.value;
+  const states: DeviceInfo['states'] = {};
+  infoObj.attributes.forEach(attr => {
+    const { name, currentValue } = attr;
+    states[name] = currentValue;
   });
 
+  const commandsResponse = await makerFetch(`/devices/${id}/commands`);
+  const commandsObj: MakerCommand[] = await commandsResponse.json();
   const commands: { [name: string]: string[] } = {};
-  $('.panel-body form[action="/device/runmethod"]').each((_i, elem) => {
-    const name = $(elem)
-      .find('input[name="method"]')
-      .attr('value');
-    const cmdArgs: string[] = [];
-    commands[name] = cmdArgs;
-
-    const argTypes = $(elem).find('input[name^="argType"]');
-    argTypes.each((_i, elem) => {
-      cmdArgs.push($(elem).attr('value'));
-    });
+  commandsObj.forEach(cmd => {
+    const name = cmd.command;
+    commands[name] = cmd.type.filter(t => t != 'n/a');
   });
 
-  return { name, deviceTypeId, states, commands };
+  return { name: infoObj.label, states, commands };
 }
 
 interface DeviceInfo {
   name: string;
-  deviceTypeId: number;
   states: {
-    [name: string]: string;
+    [name: string]: string | number | null;
   };
   commands: {
     [name: string]: string[];
   };
+}
+
+interface MakerDeviceInfo {
+  id: string;
+  name: string;
+  label: string;
+  attributes: (
+    | MakerNumberAttribute
+    | MakerEnumAttribute
+    | MakerStringAttribute)[];
+  capabilities: (string | MakerCapabilityAttribute)[];
+  commands: string[];
+}
+
+interface MakerAttribute<T> {
+  name: string;
+  currentValue: T;
+}
+
+interface MakerStringAttribute extends MakerAttribute<string | null> {
+  dataType: 'STRING';
+}
+
+interface MakerNumberAttribute extends MakerAttribute<number> {
+  dataType: 'NUMBER';
+}
+
+interface MakerEnumAttribute extends MakerAttribute<string> {
+  dataType: 'ENUM';
+  values: string[];
+}
+
+interface MakerCapabilityAttribute {
+  name: string;
+  dataType: null;
+}
+
+interface MakerCommand {
+  command: string;
+  type: string[];
 }

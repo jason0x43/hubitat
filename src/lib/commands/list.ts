@@ -1,4 +1,8 @@
+import { CommanderStatic } from 'commander';
+import Table from 'easy-table';
+
 import { trim } from '../common';
+import { makerFetch } from '../request';
 import {
   validateType,
   ResourceType,
@@ -8,8 +12,6 @@ import {
   CodeResource,
   getResources
 } from '../resource';
-import { CommanderStatic } from 'commander';
-import Table from 'easy-table';
 
 // Setup cli ------------------------------------------------------------------
 
@@ -34,8 +36,7 @@ export default function init(program: CommanderStatic) {
           const apps = await listResources(rtype);
           apps.forEach(app => addInstalledRow(t, app));
         } else {
-          const devices = await listResources(rtype);
-          console.log(devices);
+          const devices = await listDevices();
           devices.forEach(dev => addDeviceRow(t, dev));
         }
 
@@ -74,11 +75,33 @@ export default function init(program: CommanderStatic) {
 /**
  * Get a resource list from Hubitat
  */
-async function listResources(resource: 'device'): Promise<DeviceResource[]>;
 async function listResources(
   resource: 'installedapp'
 ): Promise<InstalledResource[]>;
 async function listResources(resource: ResourceType): Promise<CodeResource[]>;
 async function listResources(resource: ResourceType): Promise<Resource[]> {
   return await getResources(resource);
+}
+
+/**
+ * Get a device list using the Maker API
+ */
+async function listDevices(): Promise<DeviceResource[]> {
+  const devResponse = await makerFetch(`/devices`);
+  const devObj: MakerDevice[] = await devResponse.json();
+  return devObj.map(obj => ({
+    id: Number(obj.id),
+    name: obj.label,
+    type: 'driver',
+    driver: obj.name
+  }));
+}
+
+interface MakerDevice {
+  // The device ID
+  id: string;
+  // The device type name
+  name: string;
+  // The device name
+  label: string;
 }
