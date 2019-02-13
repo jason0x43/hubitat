@@ -1,10 +1,10 @@
-import fetch from 'node-fetch';
+import fetch, { RequestInit } from 'node-fetch';
 
 const hubitatHost = process.env.HUBITAT_HOST!;
 const makerApiId = process.env.MAKER_API_ID!;
 const makerApiToken = process.env.MAKER_API_TOKEN!;
 
-export function hubitatFetch(path: string, init?: fetch.RequestInit) {
+export function hubitatFetch(path: string, init?: RequestInit) {
   return fetch(`http://${hubitatHost}${path}`, init);
 }
 
