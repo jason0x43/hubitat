@@ -2,6 +2,17 @@
 
 set -e
 
+needsRebuild() {
+	files=$(find . -name '*.ts' -not -path './src/node_modules/*')
+	for ts in $files; do
+		js="${ts%.*}.js"
+		if [[ (! -f $js) || ($ts -nt $js) ]]; then
+			echo 'rebuild'
+			return
+		fi
+	done
+}
+
 if [[ ! -d 'src/node_modules' ]]; then
 	echo 'Installing script dependencies...'
 	cd src
@@ -9,14 +20,7 @@ if [[ ! -d 'src/node_modules' ]]; then
 	cd ..
 fi
 
-if [[ $1 == "-r" ]]; then
-	shift
-	rebuild="yes"
-else
-	rebuild=""
-fi
-
-if [[ -n $rebuild ]]; then
+if [[ -n $(needsRebuild) ]]; then
 	echo 'Building the script...'
 	cd src
 	npm --silent run build
