@@ -19,7 +19,15 @@ if [[ ! -d 'src/node_modules' ]]; then
 	cd ..
 fi
 
-if [[ -n $(needsRebuild) ]]; then
+rebuild=$1
+
+if [[ $rebuild == "-r" ]]; then
+	shift
+else
+	rebuild=""
+fi
+
+if [[ -n $rebuild || -n $(needsRebuild) ]]; then
 	echo 'Building the script...'
 	cd src
 	npm run build
