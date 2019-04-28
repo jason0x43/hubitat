@@ -8,8 +8,8 @@ import { hubitatFetch } from './request';
 export type CodeResourceType = 'app' | 'driver';
 
 export const resourceDirs = {
-  app: relative(process.cwd(), join(__dirname, '..', 'apps')),
-  driver: relative(process.cwd(), join(__dirname, '..', 'drivers'))
+  app: relative(process.cwd(), join(__dirname, '..', '..', 'apps')),
+  driver: relative(process.cwd(), join(__dirname, '..', '..', 'drivers'))
 };
 
 /**
