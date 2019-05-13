@@ -123,6 +123,7 @@ async function postResource(
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: simpleEncode({ id: '', version: '', source })
   });
+
   if (response.status !== 200) {
     throw new Error(`Error creating ${type}: ${response.statusText}`);
   }
@@ -130,10 +131,10 @@ async function postResource(
   const html = await response.text();
   const $ = cheerio.load(html);
 
-  if (!response.url.endsWith(path)) {
-    // URL didn't transition meaning code wasn't saved
-    const errors = $('#errors');
-    throw new Error(`Error creating ${type}: ${errors.text().trim()}`);
+  const errors = $('#errors');
+  const errorText = errors.text().replace(/×/, '').trim();
+  if (errorText) {
+    throw new Error(`Error creating ${type}: ${errorText}`);
   }
 
   const form = $('form[name="editForm"]');
