@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-01-08, 20:42:36-0500
+ * Last updated: 2019-05-13, 22:54:18-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -285,14 +285,20 @@ def childResubscribe(child) {
     }
 }
 
-def childSetBinaryState(child, state) {
+def childSetBinaryState(child, state, brightness = null) {
+    def body = [ BinaryState: "$state" ]
+
+    if (brightness != null) {
+        body.Brightness = "$brightness"
+    }
+
+    log.trace "Setting binary state to ${body}"
+
     new hubitat.device.HubSoapAction(
         path: '/upnp/control/basicevent1',
         urn: 'urn:Belkin:service:basicevent:1',
         action: 'SetBinaryState',
-        body: [
-            BinaryState: state
-        ],
+        body: body,
         headers: [
             Host: childGetHostAddress(child)
         ]
@@ -433,6 +439,10 @@ private initDevices() {
 
                 case ~/.*sensor.*/: 
                     name = 'Wemo Motion'
+                    break
+
+                case ~/.*dimmer.*/: 
+                    name = 'Wemo Dimmer'
                     break
             }
 
