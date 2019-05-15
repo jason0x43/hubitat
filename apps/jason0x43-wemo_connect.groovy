@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-05-13, 22:54:18-0400
+ * Last updated: 2019-05-15, 08:37:21-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -174,6 +174,8 @@ def handleSetupXml(response) {
             'urn:Belkin:device:sensor'
         ) || device.deviceType?.text().startsWith(
             'urn:Belkin:device:lightswitch'
+        ) || device.deviceType?.text().startsWith(
+            'urn:Belkin:device:dimmer'
         )
     ) {
         def devices = getWemoDevices()
@@ -496,7 +498,8 @@ private discoverAllWemoTypes() {
         'urn:Belkin:device:insight:1',
         'urn:Belkin:device:controllee:1',
         'urn:Belkin:device:sensor:1',
-        'urn:Belkin:device:lightswitch:1'
+        'urn:Belkin:device:lightswitch:1',
+        'urn:Belkin:device:dimmer:1'
     ]
 
     if (!state.subscribe) {
