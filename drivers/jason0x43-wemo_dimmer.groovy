@@ -2,7 +2,7 @@
  * WeMo Dimmer driver
  *
  * Author: Jason Cheatham
- * Last updated: 2019-05-13, 22:57:10-0400
+ * Last updated: 2019-05-15, 22:48:49-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -98,9 +98,9 @@ def parse(description) {
             log.trace "Notify: BinaryState = ${rawValue}"
             result << createBinaryStateEvent(rawValue)
 
-            if (body.property.Brightness?.text()) {
-                rawValue = body.property.Brightness?.text()
-                log.trace "Notify: Brightness = ${rawValue}"
+            if (body.property.brightness?.text()) {
+                rawValue = body.property.brightness?.text()
+                log.trace "Notify: brightness = ${rawValue}"
                 result << createLevelEvent(rawValue)
             }
         } else if (body?.property?.TimeZoneNotification?.text()) {
@@ -110,9 +110,9 @@ def parse(description) {
             log.trace "GetBinaryResponse: BinaryState = ${rawValue}"
             result << createBinaryStateEvent(rawValue)
 
-            if (body.Body.GetBinaryStateResponse.Brightness?.text()) {
-                rawValue = body.Body.GetBinaryStateResponse.Brightness?.text()
-                log.trace "GetBinaryResponse: Brightness = ${rawValue}"
+            if (body.Body.GetBinaryStateResponse.brightness?.text()) {
+                rawValue = body.Body.GetBinaryStateResponse.brightness?.text()
+                log.trace "GetBinaryResponse: brightness = ${rawValue}"
                 result << createLevelEvent(rawValue)
             }
         }

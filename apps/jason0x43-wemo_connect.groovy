@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-05-15, 08:37:21-0400
+ * Last updated: 2019-05-15, 22:31:53-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -291,7 +291,7 @@ def childSetBinaryState(child, state, brightness = null) {
     def body = [ BinaryState: "$state" ]
 
     if (brightness != null) {
-        body.Brightness = "$brightness"
+        body.brightness = "$brightness"
     }
 
     log.trace "Setting binary state to ${body}"
