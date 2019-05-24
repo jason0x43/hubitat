@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-05-21, 21:58:02-0400
+ * Last updated: 2019-05-24, 14:08:19-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -419,10 +419,10 @@ private initDevices() {
         }
 
         if (!childDevice) {
-            log.debug "Creating WeMo with MAC: ${selectedDevice.value.mac}"
             def name
             def namespace = 'jason0x43'
             def deviceData = selectedDevice.value
+            log.debug "Creating WeMo device for ${deviceData}"
 
             switch (deviceData.ssdpTerm){
                 case ~/.*insight.*/: 
