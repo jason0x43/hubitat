@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-05-28, 05:55:48-0400
+ * Last updated: 2019-05-28, 15:57:12-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -516,11 +516,9 @@ private discoverAllWemoTypes() {
 private getKnownDevices() {
     log.trace 'Creating list of known devices'
 
-    def existingDevices = getChildDevices()
-    def devices = getWemoDevices().findAll { it?.value?.verified == true }
-
     def map = [:]
 
+    def devices = getWemoDevices().findAll { it?.value?.verified == true }
     devices.each {
         def value = it.value.name ?: "WeMo device ${it.value.ssdpUSN.split(':')[1][-3..-1]}"
         def key = it.value.mac
@@ -528,15 +526,13 @@ private getKnownDevices() {
         log.trace "Added discovered device ${key}:${value}"
     }
 
+    def existingDevices = getChildDevices()
     existingDevices.each {
         def key = it.deviceNetworkId
-        if (!map[key]) {
-            def value = it.name ?: "WeMo device ${it.value.ssdpUSN.split(':')[1][-3..-1]}"
-            map[key] = value
-            log.trace "Added already-installed device ${key}:${value}"
-        }
+        def value = it.label ?: it.name
+        map[key] = value
+        log.trace "Added already-installed device ${key}:${value}"
     }
-
 
     log.trace "Known devices: ${map}"
     return map
