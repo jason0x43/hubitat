@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-05-24, 14:08:19-0400
+ * Last updated: 2019-05-28, 05:55:48-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -448,7 +448,7 @@ private initDevices() {
                 childDevice = addChildDevice(
                     namespace,
                     name,
-                    deviceData.address,
+                    deviceData.mac,
                     deviceData.hub,
                     [ 
                         'label':  deviceData.name ?: 'Wemo Device',
