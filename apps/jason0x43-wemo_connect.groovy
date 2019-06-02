@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-05-28, 15:57:12-0400
+ * Last updated: 2019-06-02, 19:38:23-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -114,12 +114,14 @@ def initialize() {
 }
 
 def childGetHostAddress(device) {
-     def ip = device.getDataValue('ip')
-     def port = device.getDataValue('port')
-     toHexAddress("${ip}:${port}")
+    log.trace "childGetHostAddress(${device})"
+    def ip = device.getDataValue('ip')
+    def port = device.getDataValue('port')
+    toHexAddress("${ip}:${port}")
 }
 
 def toHexAddress(address) {
+    log.trace "toHexAddress(${address})"
     def parts = address.split(':')
     ip = parts[0]
     port = parts[1]
@@ -224,6 +226,7 @@ def isSubscriptionHeader(header) {
 }
 
 def childGetBinaryState(child) {
+    log.trace "childGetBinaryState(${child})"
     return new hubitat.device.HubSoapAction(
         path: '/upnp/control/basicevent1',
         urn: 'urn:Belkin:service:basicevent:1',
