@@ -2,7 +2,7 @@
  * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-09-21, 17:01:48-0400
+ * Last updated: 2019-06-02, 19:44:02-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -108,7 +108,9 @@ def poll() {
     if (device.currentValue('switch') != 'offline') {
         runIn(30, setOffline)
     }
+    log.trace 'getting binary state'
     parent.childGetBinaryState(device)
+    log.trace 'got binary state'
 }
 
 def refresh() {
