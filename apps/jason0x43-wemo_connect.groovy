@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-02, 19:38:23-0400
+ * Last updated: 2019-06-03, 22:38:30-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -419,60 +419,62 @@ private initDevices() {
                 it.deviceNetworkId == selectedMac || 
                 it.device.getDataValue('mac') == selectedMac
             }
-        }
 
-        if (!childDevice) {
-            def name
-            def namespace = 'jason0x43'
-            def deviceData = selectedDevice.value
-            log.debug "Creating WeMo device for ${deviceData}"
+            if (!childDevice) {
+                def name
+                def namespace = 'jason0x43'
+                def deviceData = selectedDevice.value
+                log.debug "Creating WeMo device for ${deviceData}"
 
-            switch (deviceData.ssdpTerm){
-                case ~/.*insight.*/: 
-                    name = 'Wemo Insight Switch'
-                    break
+                switch (deviceData.ssdpTerm){
+                    case ~/.*insight.*/: 
+                        name = 'Wemo Insight Switch'
+                        break
 
-                // The Light Switch and Switch use the same driver
-                case ~/.*lightswitch.*/: 
-                case ~/.*controllee.*/: 
-                    name = 'Wemo Switch'
-                    break
+                    // The Light Switch and Switch use the same driver
+                    case ~/.*lightswitch.*/: 
+                    case ~/.*controllee.*/: 
+                        name = 'Wemo Switch'
+                        break
 
-                case ~/.*sensor.*/: 
-                    name = 'Wemo Motion'
-                    break
+                    case ~/.*sensor.*/: 
+                        name = 'Wemo Motion'
+                        break
 
-                case ~/.*dimmer.*/: 
-                    name = 'Wemo Dimmer'
-                    break
-            }
+                    case ~/.*dimmer.*/: 
+                        name = 'Wemo Dimmer'
+                        break
+                }
 
-            if (name) {
-                childDevice = addChildDevice(
-                    namespace,
-                    name,
-                    deviceData.mac,
-                    deviceData.hub,
-                    [ 
-                        'label':  deviceData.name ?: 'Wemo Device',
-                        'data': [
-                            'mac': deviceData.mac,
-                            'ip': deviceData.ip,
-                            'port': deviceData.port
+                if (name) {
+                    childDevice = addChildDevice(
+                        namespace,
+                        name,
+                        deviceData.mac,
+                        deviceData.hub,
+                        [ 
+                            'label':  deviceData.name ?: 'Wemo Device',
+                            'data': [
+                                'mac': deviceData.mac,
+                                'ip': deviceData.ip,
+                                'port': deviceData.port
+                            ]
                         ]
-                    ]
-                )
-                log.debug "Created ${childDevice.displayName} with id: " +
-                    "${childDevice.id}, MAC: ${childDevice.deviceNetworkId}"
+                    )
+                    log.debug "Created ${childDevice.displayName} with id: " +
+                        "${childDevice.id}, MAC: ${childDevice.deviceNetworkId}"
+                } else {
+                    log.trace "No driver for ${selectedDevice.value.mac} (${name})"
+                }
             } else {
-                log.trace "No driver for ${selectedDevice.value.mac} (${name})"
+                log.trace "Device ${childDevice.displayName} with id $dni already exists"
             }
-        } else {
-            log.trace "Device ${childDevice.displayName} with id $dni already exists"
-        }
 
-        log.trace 'Setting up device subscription...'
-        childDevice.refresh()
+            log.trace 'Setting up device subscription...'
+            childDevice.refresh()
+        } else {
+            log.trace "Could not find device ${dni} in ${devices}"
+        }
     }
 }
 
