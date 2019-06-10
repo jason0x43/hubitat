@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-09, 18:25:41-0400
+ * Last updated: 2019-06-09, 23:18:40-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -40,13 +40,14 @@ preferences {
 def mainPage() {
     // Reset the refresh state if the last refresh was more than 60 seconds ago
     if (!state.refreshCount || !state.lastRefresh || (now() - state.lastRefresh) > 60000) {
-        log.trace "mainPage: Resetting refresh count and discovered devices"
+        debugLog("mainPage: Resetting refresh count and discovered devices")
         state.refreshCount = 0
         state.devices = [:]
     }
 
+    state.minDriverVersion = 2
+
     def refreshCount = state.refreshCount
-    def refreshInterval = 5
 
     state.refreshCount = refreshCount + 1
     state.lastRefresh = now()
@@ -63,14 +64,15 @@ def mainPage() {
 
     dynamicPage(
         name: 'mainPage',
-        title: 'Device discovery started!',
         install: true,
         uninstall: true,
         refreshInterval: 30
     ) {
-        section() {
-            paragraph 'Device discovery messages are being broadcast every 30 seconds. ' +
+        section('<h2>Device Discovery</h2>') {
+            paragraph(
+                'Device discovery messages are being broadcast every 30 seconds. ' +
                 'Any devices on the local network should show up within a minute or two.'
+            )
 
             input(
                 'selectedDevices',
@@ -82,12 +84,20 @@ def mainPage() {
             )
         }
 
-        section('Options') {
+        section('<h2>Options</h2>') {
             input(
                 'interval',
                 'number',
-                title: 'How often should installed WeMo devices be refreshed? (minutes)',
+                title: 'How often should WeMo devices be refreshed? (minutes, default is 5, max is 59)',
                 defaultValue: 5
+            )
+
+            input(
+                'debugLogging',
+                'bool',
+                title: 'Enable debug logging',
+                defaultValue: false,
+                submitOnChange: true
             )
         }
     }
@@ -109,7 +119,25 @@ def initialize() {
     if (selectedDevices) {
         initDevices()
     }
-    schedule("0 0/10 * * * ?", 'discoverAllWemoTypes')
+
+    def interval = Math.min(settings.interval ?: 5, 59)
+
+    // cron fields:
+    //   seconds
+    //   minutes
+    //   hours
+    //   day of month
+    //   month
+    //   day of week
+    //   year
+    debugLog("initialize: scheduling discovery for every ${interval} minutes")
+    schedule("0 0/${interval} * * * ?", refreshDevices)
+}
+
+def refreshDevices() {
+    log.info('Refreshing Wemo devices')
+    getChildDevices().each { device -> device.refresh() }
+    discoverAllWemoTypes()
 }
 
 def childGetHostAddress(device) {
@@ -118,21 +146,154 @@ def childGetHostAddress(device) {
     toDecimalAddress("${hexIp}:${hexPort}")
 }
 
-def toDecimalAddress(address) {
-    def parts = address.split(':')
-    ip = parts[0]
-    port = parts[1]
-    "${convertHexToIP(ip)}:${convertHexToInt(port)}"
+def childGetBinaryState(child) {
+    log.info("Getting state for ${child}")
+    debugLog("childGetBinaryState: sending request to ${childGetHostAddress(child)}")
+    new hubitat.device.HubSoapAction(
+        path: '/upnp/control/basicevent1',
+        urn: 'urn:Belkin:service:basicevent:1',
+        action: 'GetBinaryState',
+        headers: [
+            HOST: childGetHostAddress(child)
+
+        ]
+    )
 }
 
-def getSubscriptionData(message) {
+def childResubscribe(child) {
+    log.info("Resubscribing ${child}")
+    def sid = child.getDataValue('subscriptionId')
+    if (sid == null) {
+        debugLog("childResubscribe: No existing subscription for ${child} -- subscribing")
+        return childSubscribe(child)
+    }
+
+    debugLog("childResubscribe: renewing ${child} subscription to ${sid}")
+
+    // Clear the existing SID -- it should be set if the resubscribe succeeds
+    debugLog('childSubscribe: clearing existing sid')
+    child.updateDataValue('subscriptionId', null)
+
+    debugLog("childResubscribe: sending request to ${childGetHostAddress(child)}")
+    new hubitat.device.HubAction([
+        method: 'SUBSCRIBE',
+        path: '/upnp/event/basicevent1',
+        headers: [
+            HOST: childGetHostAddress(child),
+            TIMEOUT: "Second-${getSubscriptionTimeout()}",
+            SID: "uuid:${sid}"
+        ]
+    ], child.deviceNetworkId)
+}
+
+def childSetBinaryState(child, state, brightness = null) {
+    log.info("Setting binary state for ${child}")
+    def body = [ BinaryState: "$state" ]
+
+    if (brightness != null) {
+        body.brightness = "$brightness"
+    }
+
+    debugLog("childSetBinaryState: sending binary state request to ${childGetHostAddress(child)}")
+    new hubitat.device.HubSoapAction(
+        path: '/upnp/control/basicevent1',
+        urn: 'urn:Belkin:service:basicevent:1',
+        action: 'SetBinaryState',
+        body: body,
+        headers: [
+            Host: childGetHostAddress(child)
+        ]
+    )
+}
+
+def childSubscribe(child) {
+    log.info("Subscribing to events for ${child}")
+
+    // Clear out any current subscription ID; will be reset when the
+    // subscription completes
+    debugLog('childSubscribe: clearing existing sid')
+    child.updateDataValue('subscriptionId', null)
+
+    debugLog("childSubscribe: sending subscribe request to ${childGetHostAddress(child)}")
+    new hubitat.device.HubAction([
+        method: 'SUBSCRIBE',
+        path: '/upnp/event/basicevent1',
+        headers: [
+            HOST: childGetHostAddress(child),
+            CALLBACK: "<http://${getCallbackAddress()}/>",
+            NT: 'upnp:event',
+            TIMEOUT: "Second-${getSubscriptionTimeout()}"
+        ]
+    ], child.deviceNetworkId)
+}
+
+def childSubscribeIfNecessary(child) {
+    debugLog("childSubscribeIfNecessary: checking subscription for ${child}")
+
+    def sid = child.getDataValue('subscriptionId')
+    if (sid == null) {
+        debugLog("childSubscribeIfNecessary: no active subscription -- subscribing")
+        childSubscribe(child)
+    } else {
+        debugLog("childSubscribeIfNecessary: active subscription -- skipping")
+    }
+}
+
+def childSyncTime(child) {
+    debugLog("childSyncTime: requesting sync for ${child}")
+
+    def now = new Date();
+    def tz = location.timeZone;
+    def offset = tz.getOffset(now.getTime())
+    def offsetHours = (offset / 1000 / 60 / 60).intValue()
+    def tzOffset = (offsetHours < 0 ? '-' : '') + String.format('%02d.00', Math.abs(offsetHours))
+    def isDst = tz.inDaylightTime(now)
+    def hasDst = tz.observesDaylightTime()
+
+    debugLog("childSyncTime: sending sync request to ${childGetHostAddress(child)}")
+    new hubitat.device.HubSoapAction(
+        path: '/upnp/control/timesync1',
+        url: 'urn:Belkin:service:timesync:1',
+        action: 'TimeSync',
+        body: [
+            UTC: getTime(),
+            TimeZone: tzOffset,
+            dst: isDst ? 1 : 0,
+            DstSupported: hasDst ? 1 : 0
+        ],
+        headers: [
+            HOST: childGetHostAddress(child)
+        ]
+    )
+}
+
+def childUnsubscribe(child) {
+    debugLog("childUnsubscribe: unsubscribing ${child}")
+
+    def sid = child.getDataValue('subscriptionId')
+
+    // Clear out the current subscription ID
+    debugLog('childUnsubscribe: clearing existing sid')
+    child.updateDataValue('subscriptionId', null)
+
+    debugLog("childUnsubscribe: sending unsubscribe request to ${childGetHostAddress(child)}")
+    new hubitat.device.HubAction([
+        method: 'UNSUBSCRIBE',
+        path: '/upnp/event/basicevent1',
+        headers: [
+            HOST: childGetHostAddress(child),
+            SID: "uuid:${sid}"
+        ]
+    ], child.deviceNetworkId)
+}
+
+def childUpdateSubscription(message, child) {
     def headerString = message.header
 
     if (isSubscriptionHeader(headerString)) {
-        return [
-            sid: getSubscriptionId(headerString),
-            timeout: getSubscriptionTimeout() - 30
-        ]
+        def sid = getSubscriptionId(headerString)
+        debugLog("parse: updating subscriptionId for ${child} to ${sid}")
+        child.updateDataValue('subscriptionId', sid)
     }
 }
 
@@ -144,9 +305,6 @@ def getSubscriptionId(header) {
     return sid;
 }
 
-/**
- * Return the length of a subscription
- */
 def getSubscriptionTimeout() {
     return 60 * (settings.interval ?: 5)
 }
@@ -162,8 +320,10 @@ def handleSetupXml(response) {
     def device = body.device
     def deviceType = "${device.deviceType}"
 
-    log.trace "handleSetupXml: Handling setup.xml for ${deviceType}" +
+    debugLog(
+        "handleSetupXml: Handling setup.xml for ${deviceType}" +
         " (friendly name is '${device.friendlyName}')"
+    )
 
     if (
         deviceType.startsWith('urn:Belkin:device:controllee:1') ||
@@ -194,18 +354,18 @@ def handleSsdpEvent(evt) {
 
     def parsedEvent = parseDiscoveryMessage(description)
     parsedEvent << ['hub': hub]
-    log.trace "handleSsdpEvent: Parsed discovery message: ${parsedEvent}"
+    debugLog("handleSsdpEvent: Parsed discovery message: ${parsedEvent}")
 
     def devices = getWemoDevices()
     def device = devices[parsedEvent.ssdpUSN.toString()]
 
     if (!device) {
-        log.trace "handleSsdpEvent: Adding ${parsedEvent.mac} to list of known devices"
+        debugLog("handleSsdpEvent: Adding ${parsedEvent.mac} to list of known devices")
 
         def id = parsedEvent.ssdpUSN.toString()
         state.devices << [(id): parsedEvent]
     } else if (device.ip != parsedEvent.ip || device.port != parsedEvent.port) {
-        log.trace "handleSsdpEvent: Updating IP address for existing device ${device.mac}"
+        debugLog("handleSsdpEvent: Updating IP address for existing device ${device.mac}")
 
         device.ip = parsedEvent.ip
         device.port = parsedEvent.port
@@ -213,192 +373,60 @@ def handleSsdpEvent(evt) {
         def children = getChildDevices()
         children.each {
             if (it.deviceNetworkId == device.mac) {
-                it.sync(device.ip, device.port)
-                log.trace "handleSsdpEvent: Updated IP for device ${it.deviceNetworkId}:${it}"
+                updateChildAddress(child, device.ip, device.port)
+                debugLog("handleSsdpEvent: Updated IP for device ${it.deviceNetworkId}:${it}")
             }
         }
     } else {
-        log.trace "handleSsdpEvent: Device ${device.mac} is up to date"
+        debugLog("handleSsdpEvent: Device ${device.mac} is up to date")
     }
 }
 
-def isSubscriptionHeader(header) {
-    if (header == null) {
-        return false;
-    }
-    header.contains("SID: uuid:") && header.contains('TIMEOUT:');
+private convertHexToInt(hex) {
+    Integer.parseInt(hex,16)
 }
 
-def childGetBinaryState(child) {
-    log.trace "childGetBinaryState: getting state for ${child}"
-    log.trace "childGetBinaryState: sending request to ${childGetHostAddress(child)}"
-    new hubitat.device.HubSoapAction(
-        path: '/upnp/control/basicevent1',
-        urn: 'urn:Belkin:service:basicevent:1',
-        action: 'GetBinaryState',
-        headers: [
-            HOST: childGetHostAddress(child)
-
-        ]
-    )
-}
-
-def childRefresh(child) {
-    log.trace "childRefresh: refreshing ${child}"
+private convertHexToIP(hex) {
     [
-        childSubscribe(child),
-        childTimeSyncResponse(child),
-        child.poll()
+        convertHexToInt(hex[0..1]),
+        convertHexToInt(hex[2..3]),
+        convertHexToInt(hex[4..5]),
+        convertHexToInt(hex[6..7])
+    ].join('.')
+}
+
+private debugLog(message) {
+    if (settings.debugLogging) {
+        log.debug message
+    }
+}
+
+private discoverAllWemoTypes() {
+    def targets = [
+        'urn:Belkin:device:insight:1',
+        'urn:Belkin:device:controllee:1',
+        'urn:Belkin:device:sensor:1',
+        'urn:Belkin:device:lightswitch:1',
+        'urn:Belkin:device:dimmer:1'
     ]
-}
 
-def childResubscribe(child) {
-    log.trace "childResubscribe: resubscribing ${child}"
+    def targetStr = "${targets}"
 
-    def sid = child.getDataValue('subscriptionId')
-
-    if (sid == null) {
-        log.trace 'childResubscribe: No existing subscription -- subscribing'
-        return childSubscribe(child)
+    if (state.subscribed != targetStr) {
+        targets.each { target ->
+            subscribe(location, "ssdpTerm.${target}", handleSsdpEvent)
+            debugLog('discoverAllWemoTypes: subscribed to ' + target)
+        }
+        state.subscribed = targetStr
     }
 
-    // Clear out any current subscription ID; will be reset when the
-    // subscription completes
-    log.trace 'childResubscribe: clearing existing sid'
-    child.updateDataValue('subscriptionId', null)
-
-    log.trace "childResubscribe: sending request to ${childGetHostAddress(child)}"
-    new hubitat.device.HubAction([
-        method: 'SUBSCRIBE',
-        path: '/upnp/event/basicevent1',
-        headers: [
-            HOST: childGetHostAddress(child),
-            CALLBACK: "<http://${getCallbackAddress()}/>",
-            NT: 'upnp:event',
-            TIMEOUT: "Second-${getSubscriptionTimeout()}"
-        ]
-    ], child.deviceNetworkId)
-}
-
-def childSetBinaryState(child, state, brightness = null) {
-    log.trace "childSetBinaryState: setting state for ${child}"
-    def body = [ BinaryState: "$state" ]
-
-    if (brightness != null) {
-        body.brightness = "$brightness"
-    }
-
-    log.trace "childSetBinaryState: sending binary state request to ${childGetHostAddress(child)}"
-    new hubitat.device.HubSoapAction(
-        path: '/upnp/control/basicevent1',
-        urn: 'urn:Belkin:service:basicevent:1',
-        action: 'SetBinaryState',
-        body: body,
-        headers: [
-            Host: childGetHostAddress(child)
-        ]
+    debugLog("discoverAllWemoTypes: Sending discovery message for ${targets}")
+    sendHubCommand(
+        new hubitat.device.HubAction(
+            "lan discovery ${targets.join('/')}",
+            hubitat.device.Protocol.LAN
+        )
     )
-}
-
-def childSubscribe(child) {
-    log.trace "childSubscribe: subscribing ${child}"
-
-    // Clear out any current subscription ID; will be reset when the
-    // subscription completes
-    log.trace 'childSubscribe: clearing existing sid'
-    child.updateDataValue('subscriptionId', null)
-
-    def dni = child.deviceNetworkId
-
-    log.trace "childSubscribe: sending subscribe request to ${childGetHostAddress(child)}"
-    new hubitat.device.HubAction([
-        method: 'SUBSCRIBE',
-        path: '/upnp/event/basicevent1',
-        headers: [
-            HOST: childGetHostAddress(child),
-            CALLBACK: "<http://${getCallbackAddress()}/>",
-            NT: 'upnp:event',
-            TIMEOUT: "Second-${getSubscriptionTimeout()}"
-        ]
-    ], dni)
-}
-
-def childSubscribeIfNecessary(child) {
-    log.trace "childSubscribeIfNecessary: childSubscribeIfNecessary(${child})"
-    def sid = child.getDataValue('subscriptionId')
-    if (sid == null) {
-        childSubscribe(child)
-    }
-}
-
-def childSync(child, ip, port) {
-    log.trace "childSync: childSync(${child}, ${ip}:${port})"
-
-    def existingIp = child.getDataValue('ip')
-    def existingPort = child.getDataValue('port')
-
-    if (ip && ip != existingIp) {
-        log.trace "childSync: Updating IP from ${existingIp} to ${ip}"
-        child.updateDataValue('ip', ip)
-    }
-
-    if (port && port != existingPort) {
-        log.trace "childSync: Updating port from $existingPort to $port"
-        child.updateDataValue('port', port)
-    }
-
-    childSubscribe(child)
-}
-
-/**
- * Request a time sync
- */
-def childTimeSyncResponse(child) {
-    log.trace "childTimeSyncResponse: requesting sync for ${child}"
-
-    def now = new Date();
-    def tz = location.timeZone;
-    def offset = tz.getOffset(now.getTime())
-    def offsetHours = (offset / 1000 / 60 / 60).intValue()
-    def tzOffset = (offsetHours < 0 ? '-' : '') + String.format('%02d.00', Math.abs(offsetHours))
-    def isDst = tz.inDaylightTime(now)
-    def hasDst = tz.observesDaylightTime()
-
-    log.trace "childTimeSyncResponse: sending sync request to ${childGetHostAddress(child)}"
-    new hubitat.device.HubSoapAction(
-        path: '/upnp/control/timesync1',
-        url: 'urn:Belkin:service:timesync:1',
-        action: 'TimeSync',
-        body: [
-            UTC: getTime(),
-            TimeZone: tzOffset,
-            dst: isDst ? 1 : 0,
-            DstSupported: hasDst ? 1 : 0
-        ],
-        headers: [
-            HOST: childGetHostAddress(child)
-        ]
-    )
-}
-
-def childUnsubscribe(child) {
-    log.trace "childUnsubscribe: unsubscribing ${child}"
-
-    def sid = child.getDataValue('subscriptionId')
-
-    // Clear out the current subscription ID
-    log.trace 'childUnsubscribe: clearing existing sid'
-    child.updateDataValue('subscriptionId', null)
-
-    log.trace "childUnsubscribe: sending unsubscribe request to ${childGetHostAddress(child)}"
-    new hubitat.device.HubAction([
-        method: 'UNSUBSCRIBE',
-        path: '/upnp/event/basicevent1',
-        headers: [
-            HOST: childGetHostAddress(child),
-            SID: "uuid:${sid}"
-        ]
-    ], child.deviceNetworkId)
 }
 
 private getCallbackAddress() {
@@ -408,13 +436,91 @@ private getCallbackAddress() {
     "${localIp}:${localPort}"
 }
 
+private getKnownDevices() {
+    debugLog('getKnownDevices: Creating list of known devices')
+
+    def map = [:]
+
+    def existingDevices = getChildDevices()
+    existingDevices.each {
+        def mac = it.deviceNetworkId
+        def name = it.label ?: it.name
+        log.trace "${it.getDriverVersion()} vs ${state.minDriverVersion}"
+        map[mac] = [
+            label: name,
+            needsUpdate: it.getDriverVersion() < state.minDriverVersion,
+            typeName: it.typeName
+        ]
+        debugLog("getKnownDevices: Added already-installed device ${mac}:${name}")
+    }
+
+    def devices = getWemoDevices().findAll { it?.value?.verified == true }
+    devices.each {
+        def mac = it.value.mac
+
+        if (map.containsKey(mac)) {
+            def name = it.value.name
+            if (name != null && name != map[mac].label) {
+                map[mac].label = "${name} (installed as ${map[mac].label})"
+                debugLog("getKnownDevices: Updated name for ${mac} to ${name}")
+            }
+        } else {
+            def name = "WeMo device ${it.value.ssdpUSN.split(':')[1][-3..-1]}"
+            map[mac] = [label: name]
+            debugLog("getKnownDevices: Added discovered device ${mac}:${name}")
+        }
+    }
+
+    debugLog("getKnownDevices: Known devices: ${map}")
+
+    def deviceMap = [:]
+    map.each {
+        log.trace "considering ${it}"
+        def data = it.value
+        def mac = it.key
+        def text = "${data.label} [${mac}"
+        if (data.typeName) {
+            text += ", ${data.typeName}] ${data.needsUpdate ? '&nbsp;&nbsp;<< Driver needs update >>' : ''}"
+        } else {
+            text += ']'
+        }
+        deviceMap[mac] = "<li>${text}</li>"
+    }
+
+    deviceMap
+}
+
+private getSetupXml(hexIpAddress) {
+    def hostAddress = toDecimalAddress(hexIpAddress)
+    
+    debugLog("getSetupXml: requesting setup.xml from ${hostAddress}")
+    sendHubCommand(
+        new hubitat.device.HubAction(
+            [
+                method: 'GET',
+                path: '/setup.xml',
+                headers: [ HOST: hostAddress ],
+            ],
+            null,
+            [ callback: handleSetupXml ]
+        )
+    )
+}
+
+private getWemoDevices() {
+    if (!state.devices) {
+        state.devices = [:]
+    }
+    state.devices
+}
+
 private initDevices() {
-    log.trace 'initDevices: Initializing devices'
+    debugLog('initDevices: Initializing devices')
 
     def devices = getWemoDevices()
 
     selectedDevices.each { dni ->
-        log.trace "initDevices: Looking for selected device ${dni} in known devices..."
+        debugLog("initDevices: Looking for selected device ${dni} in known devices...")
 
         def selectedDevice = devices.find {
             it.value.mac == dni
@@ -427,7 +533,7 @@ private initDevices() {
         if (selectedDevice) {
             def selectedMac = selectedDevice.value.mac
 
-            log.trace "initDevices: Found device; looking for existing child with dni ${selectedMac}"
+            debugLog("initDevices: Found device; looking for existing child with dni ${selectedMac}")
             childDevice = getChildDevices()?.find {
                 it.deviceNetworkId == selectedMac || 
                 it.device.getDataValue('mac') == selectedMac
@@ -437,7 +543,7 @@ private initDevices() {
                 def name
                 def namespace = 'jason0x43'
                 def deviceData = selectedDevice.value
-                log.trace "initDevices: Creating WeMo device for ${deviceData}"
+                debugLog("initDevices: Creating WeMo device for ${deviceData}")
 
                 switch (deviceData.ssdpTerm){
                     case ~/.*insight.*/: 
@@ -474,118 +580,37 @@ private initDevices() {
                             ]
                         ]
                     )
-                    log.trace "initDevices: Created ${childDevice.displayName} with id: " +
+                    log.info(
+                        "initDevices: Created ${childDevice.displayName} with id: " +
                         "${childDevice.id}, MAC: ${childDevice.deviceNetworkId}"
+                    )
                 } else {
-                    log.trace "initDevices: No driver for ${selectedDevice.value.mac} (${name})"
+                    log.warn("initDevices: No driver for ${selectedDevice.value.mac} (${name})")
                 }
             } else {
-                log.trace "initDevices: Device ${childDevice.displayName} with id $dni already exists"
+                debugLog("initDevices: Device ${childDevice.displayName} with id $dni already exists")
             }
 
-            log.trace 'initDevices: Setting up device subscription...'
+            debugLog('initDevices: Setting up device subscription...')
             childDevice.refresh()
         } else {
-            log.trace "initDevices: Could not find device ${dni} in ${devices}"
+            log.warn("initDevices: Could not find device ${dni} in ${devices}")
         }
     }
 }
 
-private convertHexToInt(hex) {
-    Integer.parseInt(hex,16)
-}
-
-private convertHexToIP(hex) {
-    [
-        convertHexToInt(hex[0..1]),
-        convertHexToInt(hex[2..3]),
-        convertHexToInt(hex[4..5]),
-        convertHexToInt(hex[6..7])
-    ].join('.')
-}
-
-private discoverAllWemoTypes() {
-    def targets = [
-        'urn:Belkin:device:insight:1',
-        'urn:Belkin:device:controllee:1',
-        'urn:Belkin:device:sensor:1',
-        'urn:Belkin:device:lightswitch:1',
-        'urn:Belkin:device:dimmer:1'
-    ]
-
-    def targetStr = "${targets}"
-
-    if (state.subscribed != targetStr) {
-        targets.each { target ->
-            subscribe(location, "ssdpTerm.${target}", handleSsdpEvent)
-            log.trace 'discoverAllWemoTypes: subscribed to ' + target
-        }
-        state.subscribed = targetStr
+private isSubscriptionHeader(header) {
+    if (header == null) {
+        return false;
     }
-
-    log.trace "discoverAllWemoTypes: Sending discovery message for ${targets}"
-    sendHubCommand(
-        new hubitat.device.HubAction(
-            "lan discovery ${targets.join('/')}",
-            hubitat.device.Protocol.LAN
-        )
-    )
-}
-
-private getKnownDevices() {
-    log.trace 'getKnownDevices: Creating list of known devices'
-
-    def map = [:]
-
-    def devices = getWemoDevices().findAll { it?.value?.verified == true }
-    devices.each {
-        def value = it.value.name ?: "WeMo device ${it.value.ssdpUSN.split(':')[1][-3..-1]}"
-        def key = it.value.mac
-        map[key] = value
-        log.trace "getKnownDevices: Added discovered device ${key}:${value}"
-    }
-
-    def existingDevices = getChildDevices()
-    existingDevices.each {
-        def key = it.deviceNetworkId
-        def value = it.label ?: it.name
-        map[key] = value
-        log.trace "getKnownDevices: Added already-installed device ${key}:${value}"
-    }
-
-    log.trace "getKnownDevices: Known devices: ${map}"
-    map
-}
-
-private getSetupXml(hexIpAddress) {
-    def hostAddress = toDecimalAddress(hexIpAddress)
-    
-    log.trace "getSetupXml: requesting setup.xml for ${deviceNetworkId} from ${hostAddress}"
-    sendHubCommand(
-        new hubitat.device.HubAction(
-            [
-                method: 'GET',
-                path: '/setup.xml',
-                headers: [ HOST: hostAddress ],
-            ],
-            null,
-            [ callback: handleSetupXml ]
-        )
-    )
-}
-
-private getWemoDevices() {
-    if (!state.devices) {
-        state.devices = [:]
-    }
-    state.devices
+    header.contains("SID: uuid:") && header.contains('TIMEOUT:');
 }
 
 private parseDiscoveryMessage(description) {
     def device = [:]
     def parts = description.split(',')
 
-    log.trace "parseDiscoveryMessage: Parsing discovery message: $description"
+    debugLog("parseDiscoveryMessage: Parsing discovery message: $description")
 
     parts.each { part ->
         part = part.trim()
@@ -654,8 +679,34 @@ private parseDiscoveryMessage(description) {
     device
 }
 
+private toDecimalAddress(address) {
+    def parts = address.split(':')
+    ip = parts[0]
+    port = parts[1]
+    "${convertHexToIP(ip)}:${convertHexToInt(port)}"
+}
+
+private updateChildAddress(child, ip, port) {
+    log.info("Updating IP for ${child} to ${ip}:${port}")
+
+    def existingIp = child.getDataValue('ip')
+    def existingPort = child.getDataValue('port')
+
+    if (ip && ip != existingIp) {
+        debugLog("childSync: Updating IP from ${existingIp} to ${ip}")
+        child.updateDataValue('ip', ip)
+    }
+
+    if (port && port != existingPort) {
+        debugLog("childSync: Updating port from $existingPort to $port")
+        child.updateDataValue('port', port)
+    }
+
+    childSubscribe(child)
+}
+
 private verifyDevices() {
-    log.trace 'verifyDevices: Verifying devices'
+    debugLog('verifyDevices: Verifying devices')
     def devices = getWemoDevices().findAll { it?.value?.verified != true }
     devices.each {
         // Note that the ip and port in device.value are hex

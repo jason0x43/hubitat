@@ -2,7 +2,7 @@
  * WeMo Motion driver
  *
  * Author: Jason Cheatham
- * Last updated: 2018-07-15, 13:54:42-0400
+ * Last updated: 2019-06-09, 22:48:57-0400
  *
  * Based on the original Wemo Motion driver by SmartThings, 2013-10-11.
  *
@@ -38,46 +38,40 @@ metadata {
     }
 }
 
+def getDriverVersion() {
+    2
+}
+
 def parse(description) {
-    log.debug 'parse()'
+    debugLog('parse: received message')
+
+    // A message was received, so the device isn't offline
+    unschedule('setOffline')
 
     def msg = parseLanMessage(description)
-
-    def subscriptionData = parent.getSubscriptionData(msg)
-    if (subscriptionData != null) {
-        log.trace "Updating subscriptionId to ${subscriptionData.sid}"
-        updateDataValue('subscriptionId', subscriptionData.sid)
-        log.trace "Scheduling resubscription in ${subscriptionData.timeout} s"
-        runIn(subscriptionData.timeout, resubscribe)
-    }
+    parent.childUpdateSubscription(msg, device)
 
     def result = []
     def bodyString = msg.body
     if (bodyString) {
-        try {
-            unschedule('setOffline')
-        } catch (e) {
-            log.error 'unschedule("setOffline")'
-        }
-
         def body = new XmlSlurper().parseText(bodyString)
 
         if (body?.property?.TimeSyncRequest?.text()) {
-            log.trace 'Got TimeSyncRequest'
-            result << timeSyncResponse()
+            debugLog('parse: Got TimeSyncRequest')
+            result << syncTime()
         } else if (body?.Body?.SetBinaryStateResponse?.BinaryState?.text()) {
             def rawValue = body.Body.SetBinaryStateResponse.BinaryState.text()
-            log.trace "Got SetBinaryStateResponse = ${rawValue}"
+            debugLog("parse: Got SetBinaryStateResponse = ${rawValue}")
             result << createBinaryStateEvent(rawValue)
         } else if (body?.property?.BinaryState?.text()) {
             def rawValue = body.property.BinaryState.text()
-            log.trace "Notify: BinaryState = ${rawValue}"
+            debugLog("parse: Notify: BinaryState = ${rawValue}")
             result << createBinaryStateEvent(rawValue)
         } else if (body?.property?.TimeZoneNotification?.text()) {
-            log.debug "Notify: TimeZoneNotification = ${body.property.TimeZoneNotification.text()}"
+            debugLog("parse: Notify: TimeZoneNotification = ${body.property.TimeZoneNotification.text()}")
         } else if (body?.Body?.GetBinaryStateResponse?.BinaryState?.text()) {
             def rawValue = body.Body.GetBinaryStateResponse.BinaryState.text()
-            log.trace "GetBinaryResponse: BinaryState = ${rawValue}"
+            debugLog("parse: GetBinaryResponse: BinaryState = ${rawValue}")
             result << createBinaryStateEvent(rawValue)
         }
     }
@@ -86,26 +80,33 @@ def parse(description) {
 }
 
 def poll() {
-    log.debug 'poll()'
-    if (device.currentValue('motion') != 'offline') {
-        runIn(30, setOffline)
+    log.info('Polling')
+
+    // Schedule a call to flag the device offline if no new message is received
+    if (device.currentValue('switch') != 'offline') {
+        runIn(10, setOffline)
     }
+
     parent.childGetBinaryState(device)
 }
 
 def refresh() {
-    log.debug 'refresh()'
-    parent.childRefresh(device)
+    log.info('Refreshing')
+    [
+        resubscribe(),
+        syncTime(),
+        poll()
+    ]
 }
 
 def resubscribe() {
-    log.debug 'resubscribe()'
-    runIn(10, subscribeIfNecessary)
-    parent.childResubscribe(device)
-}
+    log.info('Resubscribing')
 
-def scheduleResubscribe(timeout) {
-    runIn(resubscribeTimeout, resubscribe)
+    // Schedule a subscribe check that will run after the resubscription should
+    // have completed
+    runIn(10, subscribeIfNecessary)
+
+    parent.childResubscribe(device)
 }
 
 def setOffline() {
@@ -117,32 +118,21 @@ def setOffline() {
 }
 
 def subscribe() {
-    log.debug 'subscribe()'
+    log.info('Subscribing')
     parent.childSubscribe(device)
 }
 
 def subscribeIfNecessary() {
-    log.trace 'subscribeIfNecessary'
     parent.childSubscribeIfNecessary(device)
 }
 
-def sync(ip, port) {
-    log.debug 'sync()'
-    parent.childSync(device, ip, port)
-}
-
-def timeSyncResponse() {
-    log.debug 'Executing timeSyncResponse()'
-    parent.childTimeSyncResponse(device)
-}
-
 def unsubscribe() {
-    log.debug 'unsubscribe()'
+    log.info('Unsubscribing')
     parent.childUnsubscribe(device)
 }
 
 def updated() {
-    log.debug 'Updated'
+    log.info('Updated')
     refresh()
 }
 
@@ -153,4 +143,15 @@ private createBinaryStateEvent(rawValue) {
         value: value,
         descriptionText: "Motion is ${value}"
     )
+}
+
+
+private debugLog(message) {
+    if (parent.debugLogging) {
+        log.debug(message)
+    }
+}
+
+private syncTime() {
+    parent.childSyncTime(device)
 }

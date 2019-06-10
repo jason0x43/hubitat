@@ -2,7 +2,7 @@
  * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-02, 19:44:02-0400
+ * Last updated: 2019-06-09, 22:53:18-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -42,60 +42,54 @@ metadata {
     }
 }
 
+def getDriverVersion() {
+    2
+}
+
 def on() {
-    log.debug 'on()'
+    log.info('Turning on')
     parent.childSetBinaryState(device, '1')
 }
 
 def off() {
-    log.debug 'off()'
+    log.info('Turning off')
     parent.childSetBinaryState(device, '0')
 }
 
 def parse(description) {
-    log.trace 'parse()'
+    debugLog('parse: received message')
+
+    // A message was received, so the device isn't offline
+    unschedule('setOffline')
 
     def msg = parseLanMessage(description)
-
-    def subscriptionData = parent.getSubscriptionData(msg)
-    if (subscriptionData != null) {
-        log.trace "Updating subscriptionId to ${subscriptionData.sid}"
-        updateDataValue('subscriptionId', subscriptionData.sid)
-        log.trace "Scheduling resubscription in ${subscriptionData.timeout} s"
-        runIn(subscriptionData.timeout, resubscribe)
-    }
+    parent.childUpdateSubscription(msg, device)
 
     def result = []
     def bodyString = msg.body
     if (bodyString) {
-        try {
-            unschedule('setOffline')
-        } catch (e) {
-            log.error 'unschedule("setOffline")'
-        }
-
         def body = new XmlSlurper().parseText(bodyString)
 
         if (body?.property?.TimeSyncRequest?.text()) {
-            log.trace 'Got TimeSyncRequest'
-            result << timeSyncResponse()
+            debugLog('parse: Got TimeSyncRequest')
+            result << syncTime()
         } else if (body?.Body?.SetBinaryStateResponse?.BinaryState?.text()) {
             def rawValue = body.Body.SetBinaryStateResponse.BinaryState.text()
-            log.trace "Got SetBinaryStateResponse: ${rawValue}"
+            debugLog("parse: Got SetBinaryStateResponse: ${rawValue}")
             result += createStateEvents(rawValue)
         } else if (body?.property?.BinaryState?.text()) {
             def rawValue = body.property.BinaryState.text()
-            log.trace "Got BinaryState notification: ${rawValue}"
+            debugLog("parse: Notify: BinaryState = ${rawValue}")
             result += createStateEvents(rawValue)
         } else if (body?.property?.TimeZoneNotification?.text()) {
-            log.debug "Got TimeZoneNotification: Response = ${body.property.TimeZoneNotification.text()}"
+            debugLog("parse: Notify: TimeZoneNotification = ${body.property.TimeZoneNotification.text()}")
         } else if (body?.Body?.GetBinaryStateResponse?.BinaryState?.text()) {
             def rawValue = body.Body.GetBinaryStateResponse.BinaryState.text()
-            log.trace "Got GetBinaryResponse: ${rawValue}"
+            debugLog("parse: GetBinaryResponse: BinaryState = ${rawValue}")
             result += createStateEvents(rawValue)
         } else if (body?.Body?.GetInsightParamsResponse?.InsightParams?.text()) {
             def rawValue = body.Body.GetInsightParamsResponse.InsightParams.text()
-            log.trace "Got GetInsightParamsResponse: ${rawValue}"
+            debugLog("parse: Got GetInsightParamsResponse: ${rawValue}")
             result += createStateEvents(rawValue)
         }
     }
@@ -104,28 +98,33 @@ def parse(description) {
 }
 
 def poll() {
-    log.debug 'poll()'
+    log.info('Polling')
+
+    // Schedule a call to flag the device offline if no new message is received
     if (device.currentValue('switch') != 'offline') {
-        runIn(30, setOffline)
+        runIn(10, setOffline)
     }
-    log.trace 'getting binary state'
+
     parent.childGetBinaryState(device)
-    log.trace 'got binary state'
 }
 
 def refresh() {
-    log.debug 'refresh()'
-    parent.childRefresh(device)
+    log.info('Refreshing')
+    [
+        resubscribe(),
+        syncTime(),
+        poll()
+    ]
 }
 
 def resubscribe() {
-    log.debug 'resubscribe()'
-    runIn(10, subscribeIfNecessary)
-    parent.childResubscribe(device)
-}
+    log.info('Resubscribing')
 
-def scheduleResubscribe(timeout) {
-    runIn(resubscribeTimeout, resubscribe)
+    // Schedule a subscribe check that will run after the resubscription should
+    // have completed
+    runIn(10, subscribeIfNecessary)
+
+    parent.childResubscribe(device)
 }
 
 def setOffline() {
@@ -137,32 +136,21 @@ def setOffline() {
 }
 
 def subscribe() {
-    log.debug 'subscribe()'
+    log.info('Subscribing')
     parent.childSubscribe(device)
 }
 
 def subscribeIfNecessary() {
-    log.trace 'subscribeIfNecessary'
     parent.childSubscribeIfNecessary(device)
 }
 
-def sync(ip, port) {
-    log.debug 'sync()'
-    parent.childSync(device, ip, port)
-}
-
-def timeSyncResponse() {
-    log.debug 'Executing timeSyncResponse()'
-    parent.childTimeSyncResponse(device)
-}
-
 def unsubscribe() {
-    log.debug 'unsubscribe()'
+    log.info('Unsubscribing')
     parent.childUnsubscribe(device)
 }
 
 def updated() {
-    log.debug 'Updated'
+    log.info('Updated')
     refresh()
 }
 
@@ -172,7 +160,7 @@ private createBinaryStateEvent(rawValue) {
     //   1: on
     //   8: standby
     // We consider 'standby' to be 'on'.
-    log.trace "Creating binary state event for ${rawValue}"
+    debugLog("Creating binary state event for ${rawValue}")
     def value = rawValue == '0' ? 'off' : 'on';
     createEvent(
         name: 'switch',
@@ -182,7 +170,7 @@ private createBinaryStateEvent(rawValue) {
 }
 
 private createEnergyEvent(rawValue) {
-    log.trace "Creating energy event for ${rawValue}"
+    debugLog("Creating energy event for ${rawValue}")
     def value = (rawValue.toDouble() / 60000000).round(2)
     createEvent(
         name: 'energy',
@@ -192,7 +180,7 @@ private createEnergyEvent(rawValue) {
 }
 
 private createPowerEvent(rawValue) {
-    log.trace "Creating power event for ${rawValue}"
+    debugLog("Creating power event for ${rawValue}")
     def value = Math.round(rawValue.toInteger() / 1000)
     createEvent(
         name: 'power',
@@ -216,10 +204,20 @@ private createPowerEvent(rawValue) {
 //   483265057    energy total (mW mins)
 private createStateEvents(stateString) {
     def params = stateString.split('\\|')
-    log.trace "Event params: ${params}"
+    debugLog("Event params: ${params}")
     def events = []
     events << createBinaryStateEvent(params[0])
     events << createPowerEvent(params[7])
     events << createEnergyEvent(params[8])
     return events
+}
+
+private debugLog(message) {
+    if (parent.debugLogging) {
+        log.debug(message)
+    }
+}
+
+private syncTime() {
+    parent.childSyncTime(device)
 }
