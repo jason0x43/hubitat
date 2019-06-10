@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-09, 23:18:40-0400
+ * Last updated: 2019-06-10, 08:52:02-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -370,13 +370,9 @@ def handleSsdpEvent(evt) {
         device.ip = parsedEvent.ip
         device.port = parsedEvent.port
 
-        def children = getChildDevices()
-        children.each {
-            if (it.deviceNetworkId == device.mac) {
-                updateChildAddress(child, device.ip, device.port)
-                debugLog("handleSsdpEvent: Updated IP for device ${it.deviceNetworkId}:${it}")
-            }
-        }
+        def child = getChildDevice(device.mac)
+        updateChildAddress(child, device.ip, device.port)
+        debugLog("handleSsdpEvent: Updated IP for device ${child}")
     } else {
         debugLog("handleSsdpEvent: Device ${device.mac} is up to date")
     }
@@ -445,7 +441,6 @@ private getKnownDevices() {
     existingDevices.each {
         def mac = it.deviceNetworkId
         def name = it.label ?: it.name
-        log.trace "${it.getDriverVersion()} vs ${state.minDriverVersion}"
         map[mac] = [
             label: name,
             needsUpdate: it.getDriverVersion() < state.minDriverVersion,
@@ -475,7 +470,6 @@ private getKnownDevices() {
 
     def deviceMap = [:]
     map.each {
-        log.trace "considering ${it}"
         def data = it.value
         def mac = it.key
         def text = "${data.label} [${mac}"
