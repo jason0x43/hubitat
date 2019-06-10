@@ -193,8 +193,9 @@ async function updateRemoteResource(
       console.log(`No local script ${filename}`);
       // console.log(`No local script ${filename}, removing from manifest`);
       // delete localManifest[type][id];
+    } else {
+      console.error(error);
     }
-    console.error(error);
   }
 
   return true;
