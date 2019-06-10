@@ -2,7 +2,7 @@
  * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-09, 22:53:18-0400
+ * Last updated: 2019-06-10, 11:38:44-0400
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -206,10 +206,16 @@ private createStateEvents(stateString) {
     def params = stateString.split('\\|')
     debugLog("Event params: ${params}")
     def events = []
-    events << createBinaryStateEvent(params[0])
-    events << createPowerEvent(params[7])
-    events << createEnergyEvent(params[8])
-    return events
+    if (params.size() > 0) {
+        events << createBinaryStateEvent(params[0])
+    }
+    if (params.size() > 7) {
+        events << createPowerEvent(params[7])
+    }
+    if (params.size() > 8) {
+        events << createEnergyEvent(params[8])
+    }
+    events
 }
 
 private debugLog(message) {
