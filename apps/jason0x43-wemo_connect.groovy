@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-11, 15:11:47-0400
+ * Last updated: 2019-06-11, 16:22:53-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -56,6 +56,8 @@ def mainPage() {
     discoverAllWemoTypes()
 
     def devices = getKnownDevices()
+    def deviceLabels = [:]
+    devices.each { mac, data -> deviceLabels[mac] = data.label }
 
     dynamicPage(
         name: 'mainPage',
@@ -75,7 +77,7 @@ def mainPage() {
                 required: false,
                 title: "Select Wemo Devices \n(${devices.size() ?: 0} found)",
                 multiple: true,
-                options: devices
+                options: deviceLabels
             )
         }
 
@@ -444,10 +446,12 @@ private getKnownDevices() {
         def mac = device.deviceNetworkId
         def name = device.label ?: device.name
         map[mac] = [
-            label: name,
-            needsUpdate: device.getDriverVersion() < state.minDriverVersion,
-            address: "${hexToIp(device.getDataValue('ip'))}:${hexToInt(device.getDataValue('port'))}",
-            typeName: device.typeName
+            mac: mac,
+            name: name,
+            ip: device.getDataValue('ip'),
+            port: device.getDataValue('port'),
+            typeName: device.typeName,
+            needsUpdate: device.getDriverVersion() < state.minDriverVersion
         ]
         debugLog("getKnownDevices: Added already-installed device ${mac}:${name}")
     }
@@ -458,34 +462,40 @@ private getKnownDevices() {
 
         if (map.containsKey(mac)) {
             def name = device.name
-            if (name != null && name != map[mac].label) {
-                map[mac].label = "${name} (installed as ${map[mac].label})"
+            if (name != null && name != map[mac].name) {
+                map[mac].name = "${name} (installed as ${map[mac].name})"
                 debugLog("getKnownDevices: Updated name for ${mac} to ${name}")
             }
         } else {
-            def name = "WeMo device ${device.ssdpUSN.split(':')[1][-3..-1]}"
+            def name = device.name ?: "WeMo device ${device.ssdpUSN.split(':')[1][-3..-1]}"
             map[mac] = [
-                label: name,
-                address: "${hexToIp(device.getDataValue('ip'))}:${hexToInt(device.getDataValue('port'))}",
+                mac: mac,
+                name: name,
+                ip: device.ip,
+                port: device.port,
+                // The ssdpTerm and hub will be used if a new child device is
+                // created
+                ssdpTerm: device.ssdpTerm,
+                hub: device.hub
             ]
-            debugLog("getKnownDevices: Added discovered device ${mac}:${name}")
+            debugLog("getKnownDevices: Added discovered device ${map[mac]}")
         }
     }
 
     debugLog("getKnownDevices: Known devices: ${map}")
 
-    def deviceMap = [:]
     map.each { mac, data ->
-        def text = "${data.label} [MAC: ${mac}, IP: ${data.address}"
+        def address = "${hexToIp(data.ip)}:${hexToInt(data.port)}"
+        def text = "${data.name} [MAC: ${mac}, IP: ${address}"
         if (data.typeName) {
             text += ", Driver: ${data.typeName}] ${data.needsUpdate ? '&nbsp;&nbsp;<< Driver needs update >>' : ''}"
         } else {
             text += ']'
         }
-        deviceMap[mac] = "<li>${text}</li>"
+        map[mac].label = "<li>${text}</li>"
     }
 
-    deviceMap
+    map
 }
 
 private getSetupXml(hexIpAddress) {
@@ -523,84 +533,74 @@ private getDiscoveredDevice(usn) {
 private initDevices() {
     debugLog('initDevices: Initializing devices')
 
-    def allDevices = getDiscoveredDevices()
+    def knownDevices = getKnownDevices()
 
     selectedDevices.each { dni ->
         debugLog("initDevices: Looking for selected device ${dni} in known devices...")
 
-        def selectedDevice = allDevices.find {
-            it.value.mac == dni
-        } ?: allDevices.find {
-            "${it.value.ip}:${it.value.port}" == dni
-        }
-
-        def childDevice
+        def selectedDevice = knownDevices[dni]
 
         if (selectedDevice) {
-            def selectedMac = selectedDevice.value.mac
+            debugLog("initDevices: Found device; looking for existing child with dni ${dni}")
+            def child = getChildDevice(dni)
 
-            debugLog("initDevices: Found device; looking for existing child with dni ${selectedMac}")
-            childDevice = getChildDevices()?.find {
-                it.deviceNetworkId == selectedMac || 
-                it.device.getDataValue('mac') == selectedMac
-            }
-
-            if (!childDevice) {
-                def name
+            if (!child) {
+                def driverName
                 def namespace = 'jason0x43'
-                def deviceData = selectedDevice.value
-                debugLog("initDevices: Creating WeMo device for ${deviceData}")
+                debugLog("initDevices: Creating WeMo device for ${selectedDevice}")
 
-                switch (deviceData.ssdpTerm){
+                switch (selectedDevice.ssdpTerm){
                     case ~/.*insight.*/: 
-                        name = 'Wemo Insight Switch'
+                        driverName = 'Wemo Insight Switch'
                         break
 
                     // The Light Switch and Switch use the same driver
                     case ~/.*lightswitch.*/: 
                     case ~/.*controllee.*/: 
-                        name = 'Wemo Switch'
+                        driverName = 'Wemo Switch'
                         break
 
                     case ~/.*sensor.*/: 
-                        name = 'Wemo Motion'
+                        driverName = 'Wemo Motion'
                         break
 
                     case ~/.*dimmer.*/: 
-                        name = 'Wemo Dimmer'
+                        driverName = 'Wemo Dimmer'
                         break
                 }
 
-                if (name) {
-                    childDevice = addChildDevice(
+                if (driverName) {
+                    child = addChildDevice(
                         namespace,
-                        name,
-                        deviceData.mac,
-                        deviceData.hub,
+                        driverName,
+                        selectedDevice.mac,
+                        selectedDevice.hub,
                         [ 
-                            'label':  deviceData.name ?: 'Wemo Device',
+                            'label':  selectedDevice.name ?: 'Wemo Device',
                             'data': [
-                                'mac': deviceData.mac,
-                                'ip': deviceData.ip,
-                                'port': deviceData.port
+                                'mac': selectedDevice.mac,
+                                'ip': selectedDevice.ip,
+                                'port': selectedDevice.port
                             ]
                         ]
                     )
                     log.info(
-                        "initDevices: Created ${childDevice.displayName} with id: " +
-                        "${childDevice.id}, MAC: ${childDevice.deviceNetworkId}"
+                        "initDevices: Created ${child.displayName} with id: " +
+                        "${child.id}, MAC: ${child.deviceNetworkId}"
                     )
                 } else {
-                    log.warn("initDevices: No driver for ${selectedDevice.value.mac} (${name})")
+                    log.warn("initDevices: No driver for ${selectedDevice})")
                 }
             } else {
-                debugLog("initDevices: Device ${childDevice.displayName} with id $dni already exists")
+                debugLog("initDevices: Device ${child} with id $dni already exists")
             }
 
-            debugLog('initDevices: Setting up device subscription...')
-            childDevice.refresh()
+            if (child) {
+                debugLog('initDevices: Setting up device subscription...')
+                child.refresh()
+            }
         } else {
-            log.warn("initDevices: Could not find device ${dni} in ${allDevices}")
+            log.warn("initDevices: Could not find device ${dni} in ${knownDevices}")
         }
     }
 }
