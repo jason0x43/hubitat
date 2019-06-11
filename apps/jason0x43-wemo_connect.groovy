@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-10, 08:52:02-0400
+ * Last updated: 2019-06-11, 15:11:47-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -42,7 +42,7 @@ def mainPage() {
     if (!state.refreshCount || !state.lastRefresh || (now() - state.lastRefresh) > 60000) {
         debugLog("mainPage: Resetting refresh count and discovered devices")
         state.refreshCount = 0
-        state.devices = [:]
+        state.discoveredDevices = [:]
     }
 
     state.minDriverVersion = 2
@@ -52,13 +52,8 @@ def mainPage() {
     state.refreshCount = refreshCount + 1
     state.lastRefresh = now()
 
-    if ((refreshCount % 5) == 0) {
-        //ssdp request every 25 seconds
-        discoverAllWemoTypes()
-    } else {
-        // setup.xml request every 5 seconds except on discoveries
-        verifyDevices()
-    }
+    // ssdp request every 30 seconds
+    discoverAllWemoTypes()
 
     def devices = getKnownDevices()
 
@@ -319,10 +314,11 @@ def handleSetupXml(response) {
     def body = response.xml
     def device = body.device
     def deviceType = "${device.deviceType}"
+    def friendlyName = "${device.friendlyName}"
 
     debugLog(
         "handleSetupXml: Handling setup.xml for ${deviceType}" +
-        " (friendly name is '${device.friendlyName}')"
+        " (friendly name is '${friendlyName}')"
     )
 
     if (
@@ -332,16 +328,15 @@ def handleSetupXml(response) {
         deviceType.startsWith('urn:Belkin:device:lightswitch') ||
         deviceType.startsWith('urn:Belkin:device:dimmer')
     ) {
-        def devices = getWemoDevices()
-        def wemoDevice = devices.find {
+        def entry = getDiscoveredDevices().find {
             it.key.contains("${device.UDN}")
         }
 
-        if (wemoDevice) {
-            wemoDevice.value << [
-                name: "${device.friendlyName}",
-                verified: true
-            ]
+        if (entry) {
+            def dev = entry.value
+            debugLog("handleSetupXml: updating ${dev}")
+            dev.name = friendlyName
+            dev.verified = true
         } else {
             log.error "/setup.xml returned a wemo device that didn't exist"
         }
@@ -356,38 +351,45 @@ def handleSsdpEvent(evt) {
     parsedEvent << ['hub': hub]
     debugLog("handleSsdpEvent: Parsed discovery message: ${parsedEvent}")
 
-    def devices = getWemoDevices()
-    def device = devices[parsedEvent.ssdpUSN.toString()]
+    def usn = parsedEvent.ssdpUSN.toString()
+    def device = getDiscoveredDevice(usn)
 
-    if (!device) {
-        debugLog("handleSsdpEvent: Adding ${parsedEvent.mac} to list of known devices")
+    if (device) {
+        debugLog("handleSsdpEvent: Found cached device data for ${usn}")
 
-        def id = parsedEvent.ssdpUSN.toString()
-        state.devices << [(id): parsedEvent]
-    } else if (device.ip != parsedEvent.ip || device.port != parsedEvent.port) {
-        debugLog("handleSsdpEvent: Updating IP address for existing device ${device.mac}")
-
+        // Ensure the cached ip and port agree with what's in the discovery
+        // event
         device.ip = parsedEvent.ip
         device.port = parsedEvent.port
 
         def child = getChildDevice(device.mac)
-        updateChildAddress(child, device.ip, device.port)
-        debugLog("handleSsdpEvent: Updated IP for device ${child}")
+        if (child != null) {
+            debugLog("handleSsdpEvent: Updating IP address for ${child} [${device.mac}]")
+            updateChildAddress(child, device.ip, device.port)
+        }
     } else {
-        debugLog("handleSsdpEvent: Device ${device.mac} is up to date")
+        debugLog("handleSsdpEvent: Adding ${parsedEvent.mac} to list of known devices")
+        def id = parsedEvent.ssdpUSN.toString()
+        device = parsedEvent
+        state.discoveredDevices[id] = device
+    }
+
+    if (!device.verified) {
+        debugLog("handleSsdpEvent: Verifying ${device}")
+        getSetupXml("${device.ip}:${device.port}")
     }
 }
 
-private convertHexToInt(hex) {
+private hexToInt(hex) {
     Integer.parseInt(hex,16)
 }
 
-private convertHexToIP(hex) {
+private hexToIp(hex) {
     [
-        convertHexToInt(hex[0..1]),
-        convertHexToInt(hex[2..3]),
-        convertHexToInt(hex[4..5]),
-        convertHexToInt(hex[6..7])
+        hexToInt(hex[0..1]),
+        hexToInt(hex[2..3]),
+        hexToInt(hex[4..5]),
+        hexToInt(hex[6..7])
     ].join('.')
 }
 
@@ -438,30 +440,34 @@ private getKnownDevices() {
     def map = [:]
 
     def existingDevices = getChildDevices()
-    existingDevices.each {
-        def mac = it.deviceNetworkId
-        def name = it.label ?: it.name
+    existingDevices.each { device ->
+        def mac = device.deviceNetworkId
+        def name = device.label ?: device.name
         map[mac] = [
             label: name,
-            needsUpdate: it.getDriverVersion() < state.minDriverVersion,
-            typeName: it.typeName
+            needsUpdate: device.getDriverVersion() < state.minDriverVersion,
+            address: "${hexToIp(device.getDataValue('ip'))}:${hexToInt(device.getDataValue('port'))}",
+            typeName: device.typeName
         ]
         debugLog("getKnownDevices: Added already-installed device ${mac}:${name}")
     }
 
-    def devices = getWemoDevices().findAll { it?.value?.verified == true }
-    devices.each {
-        def mac = it.value.mac
+    def verifiedDevices = getDiscoveredDevices(true)
+    verifiedDevices.each { key, device ->
+        def mac = device.mac
 
         if (map.containsKey(mac)) {
-            def name = it.value.name
+            def name = device.name
             if (name != null && name != map[mac].label) {
                 map[mac].label = "${name} (installed as ${map[mac].label})"
                 debugLog("getKnownDevices: Updated name for ${mac} to ${name}")
             }
         } else {
-            def name = "WeMo device ${it.value.ssdpUSN.split(':')[1][-3..-1]}"
-            map[mac] = [label: name]
+            def name = "WeMo device ${device.ssdpUSN.split(':')[1][-3..-1]}"
+            map[mac] = [
+                label: name,
+                address: "${hexToIp(device.getDataValue('ip'))}:${hexToInt(device.getDataValue('port'))}",
+            ]
             debugLog("getKnownDevices: Added discovered device ${mac}:${name}")
         }
     }
@@ -469,12 +475,10 @@ private getKnownDevices() {
     debugLog("getKnownDevices: Known devices: ${map}")
 
     def deviceMap = [:]
-    map.each {
-        def data = it.value
-        def mac = it.key
-        def text = "${data.label} [${mac}"
+    map.each { mac, data ->
+        def text = "${data.label} [MAC: ${mac}, IP: ${data.address}"
         if (data.typeName) {
-            text += ", ${data.typeName}] ${data.needsUpdate ? '&nbsp;&nbsp;<< Driver needs update >>' : ''}"
+            text += ", Driver: ${data.typeName}] ${data.needsUpdate ? '&nbsp;&nbsp;<< Driver needs update >>' : ''}"
         } else {
             text += ']'
         }
@@ -501,24 +505,32 @@ private getSetupXml(hexIpAddress) {
     )
 }
 
-private getWemoDevices() {
-    if (!state.devices) {
-        state.devices = [:]
+private getDiscoveredDevices(isVerified = null) {
+    if (!state.discoveredDevices) {
+        state.discoveredDevices = [:]
     }
-    state.devices
+
+    if (verified != null) {
+        return state.discoveredDevices.findAll { it.value?.verified == isVerified }
+    }
+    return state.discoveredDevices
+}
+
+private getDiscoveredDevice(usn) {
+    getDiscoveredDevices()[usn]
 }
 
 private initDevices() {
     debugLog('initDevices: Initializing devices')
 
-    def devices = getWemoDevices()
+    def allDevices = getDiscoveredDevices()
 
     selectedDevices.each { dni ->
         debugLog("initDevices: Looking for selected device ${dni} in known devices...")
 
-        def selectedDevice = devices.find {
+        def selectedDevice = allDevices.find {
             it.value.mac == dni
-        } ?: devices.find {
+        } ?: allDevices.find {
             "${it.value.ip}:${it.value.port}" == dni
         }
 
@@ -588,7 +600,7 @@ private initDevices() {
             debugLog('initDevices: Setting up device subscription...')
             childDevice.refresh()
         } else {
-            log.warn("initDevices: Could not find device ${dni} in ${devices}")
+            log.warn("initDevices: Could not find device ${dni} in ${allDevices}")
         }
     }
 }
@@ -677,33 +689,25 @@ private toDecimalAddress(address) {
     def parts = address.split(':')
     ip = parts[0]
     port = parts[1]
-    "${convertHexToIP(ip)}:${convertHexToInt(port)}"
+    "${hexToIp(ip)}:${hexToInt(port)}"
 }
 
 private updateChildAddress(child, ip, port) {
-    log.info("Updating IP for ${child} to ${ip}:${port}")
+    def address = "${ip}:${port}"
+    log.info("Verifying that IP for ${child} is set to ${toDecimalAddress(address)}")
 
     def existingIp = child.getDataValue('ip')
     def existingPort = child.getDataValue('port')
 
     if (ip && ip != existingIp) {
-        debugLog("childSync: Updating IP from ${existingIp} to ${ip}")
+        debugLog("childSync: Updating IP from ${hexToIp(existingIp)} to ${hexToIp(ip)}")
         child.updateDataValue('ip', ip)
     }
 
     if (port && port != existingPort) {
-        debugLog("childSync: Updating port from $existingPort to $port")
+        debugLog("childSync: Updating port from ${hexToInt(existingPort)} to ${hexToInt(port)}")
         child.updateDataValue('port', port)
     }
 
     childSubscribe(child)
-}
-
-private verifyDevices() {
-    debugLog('verifyDevices: Verifying devices')
-    def devices = getWemoDevices().findAll { it?.value?.verified != true }
-    devices.each {
-        // Note that the ip and port in device.value are hex
-        getSetupXml("${it.value.ip}:${it.value.port}")
-    }
 }
