@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-11, 16:22:53-0400
+ * Last updated: 2019-07-23, 23:29:52-0400
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -326,6 +326,7 @@ def handleSetupXml(response) {
     if (
         deviceType.startsWith('urn:Belkin:device:controllee:1') ||
         deviceType.startsWith('urn:Belkin:device:insight:1') ||
+        deviceType.startsWith('urn:Belkin:device:Maker:1') ||
         deviceType.startsWith('urn:Belkin:device:sensor') ||
         deviceType.startsWith('urn:Belkin:device:lightswitch') ||
         deviceType.startsWith('urn:Belkin:device:dimmer')
@@ -404,6 +405,7 @@ private debugLog(message) {
 private discoverAllWemoTypes() {
     def targets = [
         'urn:Belkin:device:insight:1',
+        'urn:Belkin:device:Maker:1',
         'urn:Belkin:device:controllee:1',
         'urn:Belkin:device:sensor:1',
         'urn:Belkin:device:lightswitch:1',
@@ -566,6 +568,10 @@ private initDevices() {
 
                     case ~/.*dimmer.*/: 
                         driverName = 'Wemo Dimmer'
+                        break
+
+                    case ~/.*Maker.*/: 
+                        driverName = 'Wemo Maker'
                         break
                 }
 
