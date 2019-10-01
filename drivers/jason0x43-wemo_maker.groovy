@@ -2,7 +2,7 @@
  * WeMo Maker driver
  *
  * Author: Jason Cheatham
- * Last updated: 2019-07-23, 23:33:17-0400
+ * Last updated: 2019-10-01, 09:03:13-0400
  *
  * Inspired by Chris Kitch's WeMo Maker driver
  * at https://github.com/Kriskit/SmartThingsPublic/blob/master/devicetypes/kriskit/wemo/wemo-maker.groovy
@@ -45,7 +45,7 @@ metadata {
     preferences {
         section {
             input(
-                'invertSensor',
+                name: 'invertSensor',
                 type: 'bool',
                 title: 'Invert Sensor',
                 description: 'Inverts the sensor input',
