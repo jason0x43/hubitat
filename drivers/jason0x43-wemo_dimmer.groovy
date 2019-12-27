@@ -61,8 +61,31 @@ def off() {
 }
 
 def setLevel(value) {
-    log.info("Setting level to $value")
-    def binaryState = value > 0 ? 1 : 0;
+    def binaryState = 1
+    
+    if (value > 0 && value <= 100) {
+        binaryState = 1
+    } else if (value == 0) {
+        binaryState = 0
+    } else {
+        binaryState = 1
+        value = 100
+    }
+    log.info("SL1: Setting level to $value with state to $binaryState")
+    parent.childSetBinaryState(device, binaryState, value)
+}
+
+def setLevel(value, binaryState) {
+    
+    if (value > 0 && value <= 100) {
+        binaryState = 1
+    } else if (value == 0) {
+        binaryState = 0
+    } else {
+        binaryState = 1
+        value = 100
+    }
+    log.info("SL2: Setting level to $value with state to $binaryState")
     parent.childSetBinaryState(device, binaryState, value)
 }
 
@@ -87,6 +110,12 @@ def parse(description) {
             def rawValue = body.Body.SetBinaryStateResponse.BinaryState.text()
             debugLog("parse: Got SetBinaryStateResponse = ${rawValue}")
             result << createBinaryStateEvent(rawValue)
+            
+            if (body?.Body?.SetBinaryStateResponse?.brightness?.text()) {
+                rawValue = body.Body.SetBinaryStateResponse.brightness?.text()
+                debugLog("parse: Notify: brightness = ${rawValue}")
+                result << createLevelEvent(rawValue)
+            }
         } else if (body?.property?.BinaryState?.text()) {
             def rawValue = body.property.BinaryState.text()
             debugLog("parse: Notify: BinaryState = ${rawValue}")
@@ -173,16 +202,29 @@ def updated() {
 }
 
 private createBinaryStateEvent(rawValue) {
-    def value = rawValue == '0' ? 'off' : 'on'
+    def value = ''
+    
+    // Properly interpret our rawValue
+    if (rawValue == '1') {
+        value = 'on'
+    } else if (rawValue == '0') {
+        value = 'off'
+    } else {
+        // Sometimes, wemo returns us with rawValue=error, so we do nothing
+        debugLog("parse: createBinaryStateEvent: rawValue = ${rawValue} : Invalid! Not raising any events")
+        return
+    }
+    
+    // Raise the switch state event
     createEvent(
         name: 'switch',
         value: value,
-        descriptionText: "Switch is ${value}"
+        descriptionText: "Switch is ${value} : ${rawValue}"
     )
 }
 
 private createLevelEvent(rawValue) {
-    def value = "$rawValue".toInteger()
+    def value = "$rawValue".toInteger() // rawValue is always an integer from 0 to 100
     createEvent(
         name: 'level',
         value: value,

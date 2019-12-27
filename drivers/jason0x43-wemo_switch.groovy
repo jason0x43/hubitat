@@ -149,11 +149,24 @@ def updated() {
 }
 
 private createBinaryStateEvent(rawValue) {
-    def value = rawValue == '0' ? 'off' : 'on'
+    def value = ''
+    
+    // Properly interpret our rawValue
+    if (rawValue == '1') {
+        value = 'on'
+    } else if (rawValue == '0') {
+        value = 'off'
+    } else {
+        // Sometimes, wemo returns us with rawValue=error, so we do nothing
+        debugLog("parse: createBinaryStateEvent: rawValue = ${rawValue} : Invalid! Not raising any events")
+        return
+    }
+    
+    // Raise the switch state event
     createEvent(
         name: 'switch',
         value: value,
-        descriptionText: "Switch is ${value}"
+        descriptionText: "Switch is ${value} : ${rawValue}"
     )
 }
 
