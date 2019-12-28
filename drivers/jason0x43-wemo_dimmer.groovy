@@ -71,22 +71,34 @@ def setLevel(value) {
         binaryState = 1
         value = 100
     }
-    log.info("SL1: Setting level to $value with state to $binaryState")
+    log.info("setLevel: Setting level to $value with state to $binaryState")
     parent.childSetBinaryState(device, binaryState, value)
 }
 
-def setLevel(value, binaryState) {
+def setLevel(value, duration) {
+    def curValue = device.currentValue('level') 
+    def tgtValue = value
+    def fadeStepValue = Math.round((tgtValue - curValue)/duration)
+
+    log.info("setLevel: Setting level to $value from $curValue with duration $duration using step value $fadeStepValue")
+    // TODO, break-down duration=100 into perhaps 10 scheduled actions instead of 100
     
-    if (value > 0 && value <= 100) {
-        binaryState = 1
-    } else if (value == 0) {
-        binaryState = 0
-    } else {
-        binaryState = 1
-        value = 100
+    // Loop through the duration counter in seconds
+    for (i = 1; i <= duration; i++) {
+        curValue = (curValue + fadeStepValue)
+        
+        // Fixup integer rounding errors on the last cycle
+        if (i == duration && curValue != value) {
+            curValue = value
+        }
+        
+        // Schedule setLevel based on the duration counter
+        runIn(i, setLevel_scheduledHandler, [overwrite: false, data: [value: curValue]])        
     }
-    log.info("SL2: Setting level to $value with state to $binaryState")
-    parent.childSetBinaryState(device, binaryState, value)
+}
+
+def setLevel_scheduledHandler(data) {
+    setLevel(data.value)
 }
 
 def parse(description) {
