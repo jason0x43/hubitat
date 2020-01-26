@@ -2,7 +2,7 @@
  * WeMo Maker driver
  *
  * Author: Jason Cheatham
- * Last updated: 2019-10-01, 09:03:13-0400
+ * Last updated: 2020-01-25, 22:59:34-0500
  *
  * Inspired by Chris Kitch's WeMo Maker driver
  * at https://github.com/Kriskit/SmartThingsPublic/blob/master/devicetypes/kriskit/wemo/wemo-maker.groovy
@@ -178,6 +178,7 @@ private createBinaryStateEvent(rawValue) {
 
 private createPropertySetEvent(rawValue) {
     def attrList = new XmlSlurper().parseText('<attributeList>' + listString + '</attributeList>')
+    def result = []
     processAttributeList(attrList, result)
 }
 
@@ -241,6 +242,8 @@ private processAttributeList(list, result) {
             result << updateSwitch('momentary')
         }
     }
+
+    result
 }
 
 private syncTime() {
