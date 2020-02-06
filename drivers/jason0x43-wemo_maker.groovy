@@ -2,7 +2,7 @@
  * WeMo Maker driver
  *
  * Author: Jason Cheatham
- * Last updated: 2020-01-25, 22:59:34-0500
+ * Last updated: 2020-02-05, 19:35:33-0500
  *
  * Inspired by Chris Kitch's WeMo Maker driver
  * at https://github.com/Kriskit/SmartThingsPublic/blob/master/devicetypes/kriskit/wemo/wemo-maker.groovy
@@ -81,6 +81,8 @@ def parse(description) {
     def result = []
     def bodyString = msg.body
     if (bodyString) {
+        debugLog('parse: message body: ' + bodyString)
+
         def body = new XmlSlurper().parseText(bodyString)
 
         if (body?.property?.TimeSyncRequest?.text()) {
