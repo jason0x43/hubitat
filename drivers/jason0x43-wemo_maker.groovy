@@ -2,7 +2,7 @@
  * WeMo Maker driver
  *
  * Author: Jason Cheatham
- * Last updated: 2020-02-05, 19:35:33-0500
+ * Last updated: 2020-03-29, 15:53:39-0400
  *
  * Inspired by Chris Kitch's WeMo Maker driver
  * at https://github.com/Kriskit/SmartThingsPublic/blob/master/devicetypes/kriskit/wemo/wemo-maker.groovy
@@ -179,7 +179,7 @@ private createBinaryStateEvent(rawValue) {
 }
 
 private createPropertySetEvent(rawValue) {
-    def attrList = new XmlSlurper().parseText('<attributeList>' + listString + '</attributeList>')
+    def attrList = new XmlSlurper().parseText('<attributeList>' + rawValue + '</attributeList>')
     def result = []
     processAttributeList(attrList, result)
 }
@@ -199,6 +199,9 @@ private processAttributeList(list, result) {
         values[it.name.text()] = it.value.text()
     }
 
+    log.debug("sensorPresent: ${device.currentValue('sensorPresent')}")
+    log.debug("values: ${values}")
+
     def sensorPresent = device.currentValue('sensorPresent') == 'on'
 
     if (values['SensorPresent']) {
@@ -217,7 +220,7 @@ private processAttributeList(list, result) {
         result << updateSensor('disabled')
     } else if (values['Sensor']) {
         log.debug "Sensor = ${values['Sensor']}"
-        def checkValue = sensorInvert ? '1' : '0'
+        def checkValue = invertSensor ? '1' : '0'
         result << updateSensor(values['Sensor'] == checkValue ? 'closed' : 'open')
     }
 
