@@ -2,7 +2,7 @@
  * WeMo Maker driver
  *
  * Author: Jason Cheatham
- * Last updated: 2020-03-29, 15:53:39-0400
+ * Last updated: 2020-03-29, 16:00:25-0400
  *
  * Inspired by Chris Kitch's WeMo Maker driver
  * at https://github.com/Kriskit/SmartThingsPublic/blob/master/devicetypes/kriskit/wemo/wemo-maker.groovy
@@ -175,7 +175,13 @@ def updated() {
 }
 
 private createBinaryStateEvent(rawValue) {
-    updateSwitch(rawValue == '0' ? 'off' : 'on')
+    if (rawValue == '1') {
+        updateSwitch('on')
+    } else if (rawValue == '0') {
+        updateSwitch('off')
+    } else {
+        log.debug("createBinaryStateEvent: rawValue == ${rawValue}, ignoring")
+    }
 }
 
 private createPropertySetEvent(rawValue) {
