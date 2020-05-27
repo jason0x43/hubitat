@@ -2,7 +2,7 @@
  * WeMo Maker driver
  *
  * Author: Jason Cheatham
- * Last updated: 2020-03-29, 16:00:25-0400
+ * Last updated: 2020-05-27, 18:58:41-0400
  *
  * Inspired by Chris Kitch's WeMo Maker driver
  * at https://github.com/Kriskit/SmartThingsPublic/blob/master/devicetypes/kriskit/wemo/wemo-maker.groovy
@@ -214,7 +214,8 @@ private processAttributeList(list, result) {
         log.debug "SensorPresent = ${values['SensorPresent']}"
         def newSensorPresent = values['SensorPresent'] == '1'
 
-        if (sensorPresent != newSensorPresent && newSensorPresent && !values['Sensor']) {
+        // if (sensorPresent != newSensorPresent && newSensorPresent && !values['Sensor']) {
+        if (!values['Sensor']) {
             values['Sensor'] = '0'
         }
 
@@ -222,9 +223,13 @@ private processAttributeList(list, result) {
         sensorPresent = newSensorPresent
     }
 
-    if (!sensorPresent) {
-        result << updateSensor('disabled')
-    } else if (values['Sensor']) {
+    // The sensor presence functionality appears to either not work, or work
+    // differently than other examples I've seen, so just ignore it.
+    // if (!sensorPresent) {
+    //     result << updateSensor('disabled')
+    // } else if (values['Sensor']) {
+
+    if (values['Sensor']) {
         log.debug "Sensor = ${values['Sensor']}"
         def checkValue = invertSensor ? '1' : '0'
         result << updateSensor(values['Sensor'] == checkValue ? 'closed' : 'open')
