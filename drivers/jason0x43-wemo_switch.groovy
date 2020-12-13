@@ -37,15 +37,13 @@ metadata {
         command 'subscribe'
         command 'unsubscribe'
         command 'resubscribe'
-        command 'updateAddress',
-            [
+        command 'updateAddress',            [
               [name:"IP Address", type: "STRING", description: "New IP address", constraints: []]
             ]
         command 'updatePort', 
             [
-              [name:"TCP Port", type: "STRING", description: "New TCP port", constraints: []]
+              [name:"TCP Port", type: "NUMBER", description: "New TCP port", constraints: []]
             ]
-    }
     }
 }
 
@@ -189,83 +187,10 @@ private syncTime() {
     parent.childSyncTime(device)
 }
 
-
 def updatePort(port) {
-    iPort=s2i(port)
-    if (iPort < 1 || iPort > 65535 ) {
-        infoLog("Invalid TCP port specified - ${port}")
-        -1
-    } else {
-        hPort=i2h(iPort)
-        def existingPort = device.getDataValue('port')
-
-        infoLog("Existing Port: ${h2i(existingPort)}")
-        
-        if (iPort && iPort != h2i(existingPort)) {
-            debugLog("Updating port from ${h2i(existingPort)} to ${port}")
-            device.updateDataValue('port', hPort)
-        }
-        
-    }
+    parent.childUpdatePort(device, port)
 }
 
 def updateAddress(ip) {
-    
-    String[] splitIp = ip.split("\\.")
-    
-    if (splitIp.length !=4) {
-        infoLog("Invalid IP address specified - ${ip} (${splitIp.length} octets found)")
-        -1
-    } else {
-        intArrIp=strArrToIntArr(splitIp)
-        hexIp=intArrToHex(intArrIp)
-
-        def existingIp = device.getDataValue('ip')
-
-        infoLog("Existing IP: ${hexToIp(existingIp)}")
-        
-        if (ip && ip != hexToIp(existingIp)) {
-            debugLog("Updating IP from ${hexToIp(existingIp)} to ${ip}")
-            device.updateDataValue('ip', hexIp)
-        }
-    }
+    parent.childUpdateIP(device, ip)
 }
-
-private strArrToIntArr(strArr) {
-    int[] intArr = new int[strArr.length];
-    for (int i = 0; i < strArr.length; i++) {
-        intArr[i]=s2i(strArr[i])
-    }
-    intArr
-}
-
-private h2i(hex) {
-    //Hex to Integer
-    Integer.parseInt(hex,16)
-}
-
-private s2i(strV) {
-    //String to Integer
-    Integer.parseInt(strV, 10)
-}
-
-private hexToIp(hex) {
-    //Hex IP String to dotted decimal IP string
-    [
-        h2i(hex[0..1]),
-        h2i(hex[2..3]),
-        h2i(hex[4..5]),
-        h2i(hex[6..7])
-    ].join('.')
-}
-
-private intArrToHex(arrAddress) {
-    //integer array (split IP address) to Hex string
-    hubitat.helper.HexUtils.intArrayToHexString(arrAddress)
-}
-
-private i2h(i) {
-    //usage:  integerToHexString(value, minByteCount)
-    hubitat.helper.HexUtils.integerToHexString(i, 1)
-}
-
