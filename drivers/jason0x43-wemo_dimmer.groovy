@@ -43,6 +43,13 @@ metadata {
         command 'subscribe'
         command 'unsubscribe'
         command 'resubscribe'
+        command 'updateAddress',            [
+              [name:"IP Address", type: "STRING", description: "New IP address", constraints: []]
+            ]
+        command 'updatePort', 
+            [
+              [name:"TCP Port", type: "NUMBER", description: "New TCP port", constraints: []]
+            ]
     }
 }
 
@@ -252,4 +259,12 @@ private debugLog(message) {
 
 private syncTime() {
     parent.childSyncTime(device)
+}
+
+def updatePort(port) {
+    parent.childUpdatePort(device, port)
+}
+
+def updateAddress(ip) {
+    parent.childUpdateIP(device, ip)
 }
