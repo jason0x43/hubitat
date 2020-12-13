@@ -37,6 +37,8 @@ preferences {
     page(name: 'mainPage')
 }
 
+import hubitat.helper.HexUtils
+
 def mainPage() {
     // Reset the refresh state if the last refresh was more than 60 seconds ago
     if (!state.refreshCount || !state.lastRefresh || (now() - state.lastRefresh) > 60000) {
@@ -716,4 +718,47 @@ private updateChildAddress(child, ip, port) {
     }
 
     childSubscribe(child)
+}
+
+def childUpdatePort(child, port) {
+    if (port < 1 || port > 65535 ) {
+        debugLog("Invalid TCP port specified - ${port}")
+        -1
+    } else {
+        def hPort = HexUtils.integerToHexString(port)
+        def existingPort = child.getDataValue('port')
+        
+        if (port && port != h2i(existingPort)) {
+            debugLog("childUpdate: ${child} - Updating port from ${Integer.parseInt(existingPort, 16)} to ${port}")
+            child.updateDataValue('port', hPort)
+        }
+    }
+}
+
+def childUpdateIP(child, ip) {
+    
+    String[] splitIp = ip.split("\\.")
+    
+    if (splitIp.length !=4) {
+        debugLog("Invalid IP address specified - ${ip} (${splitIp.length} octets found)")
+        -1
+    } else {
+        def intArrIp = strArrToIntArr(splitIp)
+        def hexIp = HexUtils.intArrayToHexString(intArrIp)
+
+        def existingIp = child.getDataValue('ip')
+        
+        if (ip && ip != hexToIp(existingIp)) {
+            debugLog("childUpdate: ${child} - Updating IP from ${hexToIp(existingIp)} to ${ip}")
+            child.updateDataValue('ip', hexIp)
+        }
+    }
+}
+
+private strArrToIntArr(strArr) {
+    int[] intArr = new int[strArr.length];
+    for (int i = 0; i < strArr.length; i++) {
+        intArr[i]=Integer.parseInt(strArr[i], 10)
+    }
+    intArr
 }
