@@ -2,7 +2,7 @@
  * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-10, 11:38:44-0400
+ * Last updated: 2020-12-24, 10:56:32-0500
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -39,13 +39,22 @@ metadata {
         command 'subscribe'
         command 'unsubscribe'
         command 'resubscribe'
-        command 'updateAddress',            [
-              [name:"IP Address", type: "STRING", description: "New IP address", constraints: []]
-            ]
-        command 'updatePort', 
+        command 'updateAddress', [
             [
-              [name:"TCP Port", type: "NUMBER", description: "New TCP port", constraints: []]
+                name:"IP Address",
+                type: "STRING",
+                description: "New IP address",
+                constraints: []
             ]
+        ]
+        command 'updatePort', [
+            [
+                name:"TCP Port",
+                type: "NUMBER",
+                description: "New TCP port",
+                constraints: []
+            ]
+        ]
     }
 }
 
@@ -199,7 +208,7 @@ private createPowerEvent(rawValue) {
 // A state event will probably look like:
 //   8|1536896687|5998|0|249789|1209600|118|190|164773|483265057
 // Fields are:
-//   8            on/off 
+//   8            on/off
 //   1536896687   last changed at (UNIX timestamp)
 //   5998         last on for (seconds?)
 //   0            on today

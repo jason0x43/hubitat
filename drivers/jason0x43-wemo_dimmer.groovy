@@ -2,7 +2,7 @@
  * WeMo Dimmer driver
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-09, 22:48:33-0400
+ * Last updated: 2020-12-24, 10:55:43-0500
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -43,13 +43,22 @@ metadata {
         command 'subscribe'
         command 'unsubscribe'
         command 'resubscribe'
-        command 'updateAddress',            [
-              [name:"IP Address", type: "STRING", description: "New IP address", constraints: []]
-            ]
-        command 'updatePort', 
+        command 'updateAddress', [
             [
-              [name:"TCP Port", type: "NUMBER", description: "New TCP port", constraints: []]
+                name:"IP Address",
+                type: "STRING",
+                description: "New IP address",
+                constraints: []
             ]
+        ]
+        command 'updatePort', [
+            [
+                name:"TCP Port",
+                type: "NUMBER",
+                description: "New TCP port",
+                constraints: []
+            ]
+        ]
     }
 }
 
@@ -69,7 +78,7 @@ def off() {
 
 def setLevel(value) {
     def binaryState = 1
-    
+
     if (value > 0 && value <= 100) {
         binaryState = 1
     } else if (value == 0) {
@@ -83,24 +92,24 @@ def setLevel(value) {
 }
 
 def setLevel(value, duration) {
-    def curValue = device.currentValue('level') 
+    def curValue = device.currentValue('level')
     def tgtValue = value
     def fadeStepValue = Math.round((tgtValue - curValue)/duration)
 
     log.info("setLevel: Setting level to $value from $curValue with duration $duration using step value $fadeStepValue")
     // TODO, break-down duration=100 into perhaps 10 scheduled actions instead of 100
-    
+
     // Loop through the duration counter in seconds
     for (i = 1; i <= duration; i++) {
         curValue = (curValue + fadeStepValue)
-        
+
         // Fixup integer rounding errors on the last cycle
         if (i == duration && curValue != value) {
             curValue = value
         }
-        
+
         // Schedule setLevel based on the duration counter
-        runIn(i, setLevel_scheduledHandler, [overwrite: false, data: [value: curValue]])        
+        runIn(i, setLevel_scheduledHandler, [overwrite: false, data: [value: curValue]])
     }
 }
 
@@ -129,7 +138,7 @@ def parse(description) {
             def rawValue = body.Body.SetBinaryStateResponse.BinaryState.text()
             debugLog("parse: Got SetBinaryStateResponse = ${rawValue}")
             result << createBinaryStateEvent(rawValue)
-            
+
             if (body?.Body?.SetBinaryStateResponse?.brightness?.text()) {
                 rawValue = body.Body.SetBinaryStateResponse.brightness?.text()
                 debugLog("parse: Notify: brightness = ${rawValue}")
@@ -222,7 +231,7 @@ def updated() {
 
 private createBinaryStateEvent(rawValue) {
     def value = ''
-    
+
     // Properly interpret our rawValue
     if (rawValue == '1') {
         value = 'on'
@@ -233,7 +242,7 @@ private createBinaryStateEvent(rawValue) {
         debugLog("parse: createBinaryStateEvent: rawValue = ${rawValue} : Invalid! Not raising any events")
         return
     }
-    
+
     // Raise the switch state event
     createEvent(
         name: 'switch',

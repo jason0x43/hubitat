@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2019-07-23, 23:29:52-0400
+ * Last updated: 2020-12-24, 10:54:36-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -26,7 +26,7 @@ definition(
     name: 'WeMo Connect',
     namespace: 'jason0x43',
     author: 'Jason Cheatham',
-    
+
     description: 'Allows you to integrate your WeMo devices with Hubitat.',
     singleInstance: true,
     iconUrl: 'https://s3.amazonaws.com/smartapp-icons/Partner/wemo.png',
@@ -504,7 +504,7 @@ private getKnownDevices() {
 
 private getSetupXml(hexIpAddress) {
     def hostAddress = toDecimalAddress(hexIpAddress)
-    
+
     debugLog("getSetupXml: requesting setup.xml from ${hostAddress}")
     sendHubCommand(
         new hubitat.device.HubAction(
@@ -554,25 +554,25 @@ private initDevices() {
                 debugLog("initDevices: Creating WeMo device for ${selectedDevice}")
 
                 switch (selectedDevice.ssdpTerm){
-                    case ~/.*insight.*/: 
+                    case ~/.*insight.*/:
                         driverName = 'Wemo Insight Switch'
                         break
 
                     // The Light Switch and Switch use the same driver
-                    case ~/.*lightswitch.*/: 
-                    case ~/.*controllee.*/: 
+                    case ~/.*lightswitch.*/:
+                    case ~/.*controllee.*/:
                         driverName = 'Wemo Switch'
                         break
 
-                    case ~/.*sensor.*/: 
+                    case ~/.*sensor.*/:
                         driverName = 'Wemo Motion'
                         break
 
-                    case ~/.*dimmer.*/: 
+                    case ~/.*dimmer.*/:
                         driverName = 'Wemo Dimmer'
                         break
 
-                    case ~/.*Maker.*/: 
+                    case ~/.*Maker.*/:
                         driverName = 'Wemo Maker'
                         break
                 }
@@ -583,7 +583,7 @@ private initDevices() {
                         driverName,
                         selectedDevice.mac,
                         selectedDevice.hub,
-                        [ 
+                        [
                             'label':  selectedDevice.name ?: 'Wemo Device',
                             'data': [
                                 'mac': selectedDevice.mac,
@@ -727,7 +727,7 @@ def childUpdatePort(child, port) {
     } else {
         def hPort = HexUtils.integerToHexString(port)
         def existingPort = child.getDataValue('port')
-        
+
         if (port && port != h2i(existingPort)) {
             debugLog("childUpdate: ${child} - Updating port from ${Integer.parseInt(existingPort, 16)} to ${port}")
             child.updateDataValue('port', hPort)
@@ -736,9 +736,8 @@ def childUpdatePort(child, port) {
 }
 
 def childUpdateIP(child, ip) {
-    
     String[] splitIp = ip.split("\\.")
-    
+
     if (splitIp.length !=4) {
         debugLog("Invalid IP address specified - ${ip} (${splitIp.length} octets found)")
         -1
@@ -747,7 +746,7 @@ def childUpdateIP(child, ip) {
         def hexIp = HexUtils.intArrayToHexString(intArrIp)
 
         def existingIp = child.getDataValue('ip')
-        
+
         if (ip && ip != hexToIp(existingIp)) {
             debugLog("childUpdate: ${child} - Updating IP from ${hexToIp(existingIp)} to ${ip}")
             child.updateDataValue('ip', hexIp)

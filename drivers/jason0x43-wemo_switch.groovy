@@ -2,7 +2,7 @@
  * WeMo Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-09, 23:21:45-0400
+ * Last updated: 2020-12-24, 10:57:13-0500
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -37,13 +37,22 @@ metadata {
         command 'subscribe'
         command 'unsubscribe'
         command 'resubscribe'
-        command 'updateAddress',            [
-              [name:"IP Address", type: "STRING", description: "New IP address", constraints: []]
-            ]
-        command 'updatePort', 
+        command 'updateAddress', [
             [
-              [name:"TCP Port", type: "NUMBER", description: "New TCP port", constraints: []]
+                name:"IP Address",
+                type: "STRING",
+                description: "New IP address",
+                constraints: []
             ]
+        ]
+        command 'updatePort', [
+            [
+                name:"TCP Port",
+                type: "NUMBER",
+                description: "New TCP port",
+                constraints: []
+            ]
+        ]
     }
 }
 
@@ -157,7 +166,7 @@ def updated() {
 
 private createBinaryStateEvent(rawValue) {
     def value = ''
-    
+
     // Properly interpret our rawValue
     if (rawValue == '1') {
         value = 'on'
@@ -168,7 +177,7 @@ private createBinaryStateEvent(rawValue) {
         debugLog("parse: createBinaryStateEvent: rawValue = ${rawValue} : Invalid! Not raising any events")
         return
     }
-    
+
     // Raise the switch state event
     createEvent(
         name: 'switch',
