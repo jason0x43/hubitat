@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2020-12-24, 10:54:36-0500
+ * Last updated: 2021-01-10, 16:53:23-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -142,6 +142,8 @@ def refreshDevices() {
 def childGetHostAddress(device) {
     def hexIp = device.getDataValue('ip')
     def hexPort = device.getDataValue('port')
+    debugLog("childGetHostAddress: hexIp = ${hexIp}")
+    debugLog("childGetHostAddress: hexPort = ${hexPort}")
     toDecimalAddress("${hexIp}:${hexPort}")
 }
 
@@ -694,6 +696,7 @@ private parseDiscoveryMessage(description) {
 }
 
 private toDecimalAddress(address) {
+    debugLog("toDecimalAddress: converting ${address}")
     def parts = address.split(':')
     ip = parts[0]
     port = parts[1]
