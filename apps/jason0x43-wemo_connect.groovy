@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-10, 16:53:23-0500
+ * Last updated: 2021-01-12, 21:18:03-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -140,6 +140,7 @@ def refreshDevices() {
 }
 
 def childGetHostAddress(device) {
+    debugLog("childGetHostAddress: getting address for ${child}")
     def hexIp = device.getDataValue('ip')
     def hexPort = device.getDataValue('port')
     debugLog("childGetHostAddress: hexIp = ${hexIp}")
@@ -172,7 +173,7 @@ def childResubscribe(child) {
     debugLog("childResubscribe: renewing ${child} subscription to ${sid}")
 
     // Clear the existing SID -- it should be set if the resubscribe succeeds
-    debugLog('childSubscribe: clearing existing sid')
+    debugLog('childReubscribe: clearing existing sid')
     child.updateDataValue('subscriptionId', null)
 
     debugLog("childResubscribe: sending request to ${childGetHostAddress(child)}")
@@ -213,7 +214,7 @@ def childSubscribe(child) {
     // Clear out any current subscription ID; will be reset when the
     // subscription completes
     debugLog('childSubscribe: clearing existing sid')
-    child.updateDataValue('subscriptionId', null)
+    child.updateDataValue('subscriptionId', '')
 
     debugLog("childSubscribe: sending subscribe request to ${childGetHostAddress(child)}")
     new hubitat.device.HubAction([
@@ -275,7 +276,7 @@ def childUnsubscribe(child) {
 
     // Clear out the current subscription ID
     debugLog('childUnsubscribe: clearing existing sid')
-    child.updateDataValue('subscriptionId', null)
+    child.updateDataValue('subscriptionId', '')
 
     debugLog("childUnsubscribe: sending unsubscribe request to ${childGetHostAddress(child)}")
     new hubitat.device.HubAction([
@@ -388,10 +389,12 @@ def handleSsdpEvent(evt) {
 }
 
 private hexToInt(hex) {
+    log.debug "Converting ${hex} to int..."
     Integer.parseInt(hex,16)
 }
 
 private hexToIp(hex) {
+    log.debug "Converting ${hex} to IP..."
     [
         hexToInt(hex[0..1]),
         hexToInt(hex[2..3]),
@@ -704,6 +707,7 @@ private toDecimalAddress(address) {
 }
 
 private updateChildAddress(child, ip, port) {
+    debugLog("updateChildAddress: Updating address of ${child} to ${ip}:${port}")
     def address = "${ip}:${port}"
     log.info("Verifying that IP for ${child} is set to ${toDecimalAddress(address)}")
 
@@ -724,6 +728,7 @@ private updateChildAddress(child, ip, port) {
 }
 
 def childUpdatePort(child, port) {
+    debugLog("childUpdatePort: Updating child port to ${port}")
     if (port < 1 || port > 65535 ) {
         debugLog("Invalid TCP port specified - ${port}")
         -1
@@ -740,6 +745,7 @@ def childUpdatePort(child, port) {
 
 def childUpdateIP(child, ip) {
     String[] splitIp = ip.split("\\.")
+    debugLog("childUpdateIP: Updating child IP to ${ip}")
 
     if (splitIp.length !=4) {
         debugLog("Invalid IP address specified - ${ip} (${splitIp.length} octets found)")
