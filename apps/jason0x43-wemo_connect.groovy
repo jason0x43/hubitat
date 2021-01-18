@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-12, 21:18:03-0500
+ * Last updated: 2021-01-17, 21:26:21-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -139,10 +139,10 @@ def refreshDevices() {
     discoverAllWemoTypes()
 }
 
-def childGetHostAddress(device) {
+def childGetHostAddress(child) {
     debugLog("childGetHostAddress: getting address for ${child}")
-    def hexIp = device.getDataValue('ip')
-    def hexPort = device.getDataValue('port')
+    def hexIp = child.getDataValue('ip')
+    def hexPort = child.getDataValue('port')
     debugLog("childGetHostAddress: hexIp = ${hexIp}")
     debugLog("childGetHostAddress: hexPort = ${hexPort}")
     toDecimalAddress("${hexIp}:${hexPort}")
@@ -731,35 +731,36 @@ def childUpdatePort(child, port) {
     debugLog("childUpdatePort: Updating child port to ${port}")
     if (port < 1 || port > 65535 ) {
         debugLog("Invalid TCP port specified - ${port}")
-        -1
-    } else {
-        def hPort = HexUtils.integerToHexString(port)
-        def existingPort = child.getDataValue('port')
+        return
+    }
+    
+    def existingHexPort = child.getDataValue('port')
+    def existingPort = HexUtils.hexStringToInt(existingHexPort)
 
-        if (port && port != h2i(existingPort)) {
-            debugLog("childUpdate: ${child} - Updating port from ${Integer.parseInt(existingPort, 16)} to ${port}")
-            child.updateDataValue('port', hPort)
-        }
+    if (port && port != existingPort) {
+        debugLog("childUpdatePort: ${child} - Updating port from ${existingPort} to ${port}")
+        def hexPort = HexUtils.integerToHexString(port, 2)
+        child.updateDataValue('port', hexPort)
     }
 }
 
-def childUpdateIP(child, ip) {
-    String[] splitIp = ip.split("\\.")
-    debugLog("childUpdateIP: Updating child IP to ${ip}")
+def childUpdateIp(child, ip) {
+    debugLog("childUpdateIp: Updating child IP to ${ip}")
+    String[] parts = ip.split("\\.")
 
-    if (splitIp.length !=4) {
-        debugLog("Invalid IP address specified - ${ip} (${splitIp.length} octets found)")
-        -1
-    } else {
-        def intArrIp = strArrToIntArr(splitIp)
-        def hexIp = HexUtils.intArrayToHexString(intArrIp)
+    if (parts.length != 4) {
+        debugLog("Invalid address specified - ${ip} (${parts.length} octets found)")
+        return
+    }
+    
+    def existingHexIp = child.getDataValue('ip')
+    def existingIp = hexToIp(existingHexIp)
 
-        def existingIp = child.getDataValue('ip')
-
-        if (ip && ip != hexToIp(existingIp)) {
-            debugLog("childUpdate: ${child} - Updating IP from ${hexToIp(existingIp)} to ${ip}")
-            child.updateDataValue('ip', hexIp)
-        }
+    if (ip && ip != existingIp) {
+        debugLog("childUpdateIp: ${child} - Updating IP from ${existingIp} to ${ip}")
+        def intParts = strArrToIntArr(parts)
+        def hexIp = HexUtils.intArrayToHexString(intParts)
+        child.updateDataValue('ip', hexIp)
     }
 }
 
