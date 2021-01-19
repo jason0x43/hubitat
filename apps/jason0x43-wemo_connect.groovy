@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-18, 20:16:56-0500
+ * Last updated: 2021-01-18, 20:29:55-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -184,6 +184,14 @@ def installed() {
 def updated() {
     log.info('Updated')
     initialize()
+}
+
+def uninstalled() {
+    log.info('Uninstalling')
+    getChildDevices().each { device ->
+        log.info("Removing child device ${device}")
+        deleteChildDevice(device.deviceNetworkId)
+    }
 }
 
 def initialize() {
