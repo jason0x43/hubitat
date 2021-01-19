@@ -2,7 +2,7 @@
  * WeMo Maker driver
  *
  * Author: Jason Cheatham
- * Last updated: 2020-05-27, 18:58:41-0400
+ * Last updated: 2021-01-18, 20:03:13-0500
  *
  * Inspired by Chris Kitch's WeMo Maker driver
  * at https://github.com/Kriskit/SmartThingsPublic/blob/master/devicetypes/kriskit/wemo/wemo-maker.groovy
@@ -52,11 +52,25 @@ metadata {
                 required: true
             )
         }
+        section {
+            input(
+                name: 'ipAddress',
+                type: 'string',
+                title: 'IP address',
+                defaultValue: hexToIp(getDataValue('ip') ?: "00000000")
+            )
+            input(
+                name: 'ipPort',
+                type: 'number',
+                title: 'IP port',
+                defaultValue: HexUtils.hexStringToInt(getDataValue('port') ?: "0")
+            )
+        }
     }
 }
 
 def getDriverVersion() {
-    2
+    3
 }
 
 def on() {
@@ -171,6 +185,12 @@ def unsubscribe() {
 
 def updated() {
     log.info('Updated')
+    if (ipPort) {
+        parent.childUpdatePort(device, ipPort);
+    }
+    if (ipAddress) {
+        parent.childUpdateIp(device, ipAddress);
+    }
     refresh()
 }
 

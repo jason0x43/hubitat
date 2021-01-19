@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-17, 21:26:21-0500
+ * Last updated: 2021-01-18, 19:59:52-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -40,14 +40,16 @@ preferences {
 import hubitat.helper.HexUtils
 
 def mainPage() {
+    debugLog("mainPage: Rendering main with state: ${state}")
+    
     // Reset the refresh state if the last refresh was more than 60 seconds ago
     if (!state.refreshCount || !state.lastRefresh || (now() - state.lastRefresh) > 60000) {
         debugLog("mainPage: Resetting refresh count and discovered devices")
         state.refreshCount = 0
-        state.discoveredDevices = [:]
+		initDiscoveredDevices()
     }
 
-    state.minDriverVersion = 2
+    state.minDriverVersion = 3
 
     def refreshCount = state.refreshCount
 
@@ -55,11 +57,28 @@ def mainPage() {
     state.lastRefresh = now()
 
     // ssdp request every 30 seconds
-    discoverAllWemoTypes()
+    // discoverAllWemoTypes()
 
     def devices = getKnownDevices()
+    debugLog("mainPage: Known devices: ${devices}")
     def deviceLabels = [:]
     devices.each { mac, data -> deviceLabels[mac] = data.label }
+    
+    debugLog("mainPage: manualAddress = ${manualAddress}")
+    def addressIsValid = true
+    if (manualAddress) {
+        def hexAddress = toHexAddress(manualAddress)
+        if (!hexAddress) {
+            addressIsValid = false;
+        } else {
+            try {
+                getSetupXml(hexAddress)
+            } catch (Throwable t) {
+                log.error(t)
+                addressIsValid = false
+            }
+        }
+    }
 
     dynamicPage(
         name: 'mainPage',
@@ -83,6 +102,35 @@ def mainPage() {
             )
         }
 
+        section('<h2>Manually add device</h2>') {
+            paragraph(
+                'Provide an address in the format 192.168.0.10:12345 to ' +
+                'manually add a device. If a device is discovered, it will ' +
+                'show up in the discovered devices list above.'
+            )
+            
+            if (!addressIsValid) {
+                paragraph(
+                    'The address was invalid or the device was unreachable. ' +
+                    'Please try again.'
+                )
+            }
+            
+            input(
+                'manualAddress',
+                'string',
+                required: false,
+                title: 'Address:port of a Wemo device',
+            )
+            
+            href(
+                name: "submitAddress",
+                title: "Submit",
+                page: "mainPage",
+                description: "Click to check for a device at the above address"
+            )
+        }
+
         section('<h2>Options</h2>') {
             input(
                 'interval',
@@ -102,18 +150,43 @@ def mainPage() {
     }
 }
 
+private toHexAddress(ip) {
+    try {
+        def parts = manualAddress.split(":")
+        if (parts.length != 2) {
+            return nil
+        }
+
+        def octets = parts[0].split("\\.")
+        if (octets.length != 4) {
+            return nil
+        }
+        
+        def intOctets = strArrToIntArr(octets)
+        def hexIp = HexUtils.intArrayToHexString(intOctets)
+        
+        def intPort = parts[1].toInteger()
+        def hexPort = HexUtils.integerToHexString(intPort, 2)
+    
+        return "${hexIp}:${hexPort}"
+    } catch (Exception e) {
+        log.error(e)
+        return nil
+    }
+}
+
 def installed() {
-    log.debug('Installed')
+    log.info('Installed')
     initialize()
 }
 
 def updated() {
-    log.debug('Updated')
+    log.info('Updated')
     initialize()
 }
 
 def initialize() {
-    log.debug 'Initializing'
+    log.info('Initializing')
     unschedule()
     if (selectedDevices) {
         initDevices()
@@ -294,7 +367,7 @@ def childUpdateSubscription(message, child) {
 
     if (isSubscriptionHeader(headerString)) {
         def sid = getSubscriptionId(headerString)
-        debugLog("parse: updating subscriptionId for ${child} to ${sid}")
+        debugLog("childUpdateSubscription: updating subscriptionId for ${child} to ${sid}")
         child.updateDataValue('subscriptionId', sid)
     }
 }
@@ -317,12 +390,12 @@ def getTime() {
     ((new GregorianCalendar().time.time / 1000l).toInteger()).toString()
 }
 
-def handleSetupXml(response) {
-    def body = response.xml
+def handleSetupXml(body) {
     def device = body.device
     def deviceType = "${device.deviceType}"
     def friendlyName = "${device.friendlyName}"
-
+    
+    debugLog("Manual address: ${manualAddress}")
     debugLog(
         "handleSetupXml: Handling setup.xml for ${deviceType}" +
         " (friendly name is '${friendlyName}')"
@@ -337,7 +410,7 @@ def handleSetupXml(response) {
         deviceType.startsWith('urn:Belkin:device:dimmer')
     ) {
         def entry = getDiscoveredDevices().find {
-            it.key.contains("${device.UDN}")
+            it.key.contains("${device.UDN}") || it.key.contains("${device.mac}")
         }
 
         if (entry) {
@@ -346,9 +419,22 @@ def handleSetupXml(response) {
             dev.name = friendlyName
             dev.verified = true
         } else {
-            log.error "/setup.xml returned a wemo device that didn't exist"
+            debugLog("handleSetupXml: Adding ${device.macAddress} to list of known devices")
+            def dev = [:]
+            def hexAddress = toHexAddress(manualAddress)
+            dev.name = "${friendlyName}"
+            dev.deviceType = "${deviceType}"
+            dev.mac = "${device.macAddress}"
+            dev.ip = hexAddress.split(":")[0]
+            dev.port = hexAddress.split(":")[1]
+            dev.verified = true
+			addDiscoveredDevice(dev.mac, dev)
         }
+    } else {
+        log.info("handleSetupXml: Ignoring device of unknown type ${deviceType}")
     }
+    
+    debugLog("handleSetupXml: Discovered devices: ${getDiscoveredDevices()}")
 }
 
 def handleSsdpEvent(evt) {
@@ -359,11 +445,12 @@ def handleSsdpEvent(evt) {
     parsedEvent << ['hub': hub]
     debugLog("handleSsdpEvent: Parsed discovery message: ${parsedEvent}")
 
+    def mac = parsedEvent.mac
     def usn = parsedEvent.ssdpUSN.toString()
-    def device = getDiscoveredDevice(usn)
+    def device = getDiscoveredDevice(mac) ?: getDiscoveredDevice(usn)
 
     if (device) {
-        debugLog("handleSsdpEvent: Found cached device data for ${usn}")
+        debugLog("handleSsdpEvent: Found cached device data for ${mac} (${usn})")
 
         // Ensure the cached ip and port agree with what's in the discovery
         // event
@@ -372,14 +459,13 @@ def handleSsdpEvent(evt) {
 
         def child = getChildDevice(device.mac)
         if (child != null) {
-            debugLog("handleSsdpEvent: Updating IP address for ${child} [${device.mac}]")
+            debugLog("handleSsdpEvent: Updating IP address for ${child} [${mac}]")
             updateChildAddress(child, device.ip, device.port)
         }
     } else {
-        debugLog("handleSsdpEvent: Adding ${parsedEvent.mac} to list of known devices")
-        def id = parsedEvent.ssdpUSN.toString()
+        debugLog("handleSsdpEvent: Adding ${mac} to list of known devices")
         device = parsedEvent
-        state.discoveredDevices[id] = device
+		addDiscoveredDevice(mac, device)
     }
 
     if (!device.verified) {
@@ -389,12 +475,12 @@ def handleSsdpEvent(evt) {
 }
 
 private hexToInt(hex) {
-    log.debug "Converting ${hex} to int..."
+    debugLog "hexToInt: Converting ${hex} to int..."
     Integer.parseInt(hex,16)
 }
 
 private hexToIp(hex) {
-    log.debug "Converting ${hex} to IP..."
+    debugLog "hexToIp: Converting ${hex} to IP..."
     [
         hexToInt(hex[0..1]),
         hexToInt(hex[2..3]),
@@ -448,13 +534,13 @@ private getCallbackAddress() {
 private getKnownDevices() {
     debugLog('getKnownDevices: Creating list of known devices')
 
-    def map = [:]
+    def knownDevices = [:]
 
     def existingDevices = getChildDevices()
     existingDevices.each { device ->
         def mac = device.deviceNetworkId
         def name = device.label ?: device.name
-        map[mac] = [
+        knownDevices[mac] = [
             mac: mac,
             name: name,
             ip: device.getDataValue('ip'),
@@ -466,77 +552,85 @@ private getKnownDevices() {
     }
 
     def verifiedDevices = getDiscoveredDevices(true)
+    debugLog("getKnownDevices: verified devices: ${verifiedDevices}")
     verifiedDevices.each { key, device ->
         def mac = device.mac
 
-        if (map.containsKey(mac)) {
+        if (knownDevices.containsKey(mac)) {
             def name = device.name
-            if (name != null && name != map[mac].name) {
-                map[mac].name = "${name} (installed as ${map[mac].name})"
+            if (name != null && name != knownDevices[mac].name) {
+                knownDevices[mac].name = "${name} (installed as ${knownDevices[mac].name})"
                 debugLog("getKnownDevices: Updated name for ${mac} to ${name}")
             }
         } else {
             def name = device.name ?: "WeMo device ${device.ssdpUSN.split(':')[1][-3..-1]}"
-            map[mac] = [
+            knownDevices[mac] = [
                 mac: mac,
                 name: name,
                 ip: device.ip,
                 port: device.port,
-                // The ssdpTerm and hub will be used if a new child device is
-                // created
+                // The ssdpTerm or deviceType and hub will be used if a new
+                // child device is created
                 ssdpTerm: device.ssdpTerm,
+                deviceType: device.deviceType,
                 hub: device.hub
             ]
-            debugLog("getKnownDevices: Added discovered device ${map[mac]}")
+            debugLog("getKnownDevices: Added discovered device ${knownDevices[mac]}")
         }
     }
 
-    debugLog("getKnownDevices: Known devices: ${map}")
+    debugLog("getKnownDevices: Known devices: ${knownDevices}")
 
-    map.each { mac, data ->
-        def address = "${hexToIp(data.ip)}:${hexToInt(data.port)}"
-        def text = "${data.name} [MAC: ${mac}, IP: ${address}"
-        if (data.typeName) {
-            text += ", Driver: ${data.typeName}] ${data.needsUpdate ? '&nbsp;&nbsp;<< Driver needs update >>' : ''}"
+    knownDevices.each { mac, device ->
+        def address = "${hexToIp(device.ip)}:${hexToInt(device.port)}"
+        def text = "${device.name} [MAC: ${mac}, IP: ${address}"
+        if (device.typeName) {
+            text += ", Driver: ${device.typeName}] " +
+              "${device.needsUpdate ? '&nbsp;&nbsp;<< Driver needs update >>' : ''}"
         } else {
             text += ']'
         }
-        map[mac].label = "<li>${text}</li>"
+        knownDevices[mac].label = "<li>${text}</li>"
     }
 
-    map
+    return knownDevices
 }
 
 private getSetupXml(hexIpAddress) {
     def hostAddress = toDecimalAddress(hexIpAddress)
 
     debugLog("getSetupXml: requesting setup.xml from ${hostAddress}")
-    sendHubCommand(
-        new hubitat.device.HubAction(
-            [
-                method: 'GET',
-                path: '/setup.xml',
-                headers: [ HOST: hostAddress ],
-            ],
-            null,
-            [ callback: handleSetupXml ]
-        )
-    )
+    httpGet([
+        uri: "http://${hostAddress}/setup.xml",
+        contentType: "text/xml"
+    ]) { resp ->
+        handleSetupXml(resp.data)
+    }
+    debugLog("getSetupXml: finished requesting setup.xml")
 }
 
 private getDiscoveredDevices(isVerified = null) {
-    if (!state.discoveredDevices) {
-        state.discoveredDevices = [:]
-    }
-
-    if (verified != null) {
+    debugLog("getDiscoveredDevices: Getting discovered devices with ${isVerified}")
+    if (isVerified != null) {
+        debugLog("getDiscoveredDevices: Finding verified devices in ${state.discoveredDevices}")
         return state.discoveredDevices.findAll { it.value?.verified == isVerified }
     }
     return state.discoveredDevices
 }
 
-private getDiscoveredDevice(usn) {
-    getDiscoveredDevices()[usn]
+private getDiscoveredDevice(id) {
+    debugLog("getDiscoveredDevice: Getting discovered device with ID ${id}")
+    return state.discoveredDevices[id]
+}
+
+private addDiscoveredDevice(id, device) {
+    debugLog("addDiscoveredDevice: Adding ${device} as ${id}")
+	state.discoveredDevices["${id}"] = device
+}
+
+private initDiscoveredDevices() {
+    debugLog("initDiscoveredDevices: Initializing discovered devices")
+	state.discoveredDevices = [:]
 }
 
 private initDevices() {
@@ -556,9 +650,10 @@ private initDevices() {
             if (!child) {
                 def driverName
                 def namespace = 'jason0x43'
+                def deviceType = selectedDevice.ssdpTerm ?: selectedDevice.deviceType
                 debugLog("initDevices: Creating WeMo device for ${selectedDevice}")
 
-                switch (selectedDevice.ssdpTerm){
+                switch (deviceType) {
                     case ~/.*insight.*/:
                         driverName = 'Wemo Insight Switch'
                         break
@@ -638,7 +733,7 @@ private parseDiscoveryMessage(description) {
         switch (part) {
             case { it .startsWith('devicetype:') }:
                 valueString = part.split(':')[1].trim()
-                device.devicetype = valueString
+                device.deviceType = valueString
                 break
             case { it.startsWith('mac:') }:
                 valueString = part.split(':')[1].trim()

@@ -2,7 +2,7 @@
  * WeMo Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-17, 21:18:35-0500
+ * Last updated: 2021-01-18, 20:00:03-0500
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -68,7 +68,7 @@ private hexToIp(hex) {
 }
 
 def getDriverVersion() {
-    2
+    3
 }
 
 def on() {

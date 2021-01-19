@@ -2,7 +2,7 @@
  * WeMo Motion driver
  *
  * Author: Jason Cheatham
- * Last updated: 2019-06-09, 22:48:57-0400
+ * Last updated: 2021-01-18, 20:01:53-0500
  *
  * Based on the original Wemo Motion driver by SmartThings, 2013-10-11.
  *
@@ -36,10 +36,25 @@ metadata {
         command 'unsubscribe'
         command 'resubscribe'
     }
+
+    preferences {
+        input(
+            name: 'ipAddress',
+            type: 'string',
+            title: 'IP address',
+            defaultValue: hexToIp(getDataValue('ip') ?: "00000000")
+        )
+        input(
+            name: 'ipPort',
+            type: 'number',
+            title: 'IP port',
+            defaultValue: HexUtils.hexStringToInt(getDataValue('port') ?: "0")
+        )
+    }
 }
 
 def getDriverVersion() {
-    2
+    3
 }
 
 def parse(description) {
@@ -133,6 +148,12 @@ def unsubscribe() {
 
 def updated() {
     log.info('Updated')
+    if (ipPort) {
+        parent.childUpdatePort(device, ipPort);
+    }
+    if (ipAddress) {
+        parent.childUpdateIp(device, ipAddress);
+    }
     refresh()
 }
 
