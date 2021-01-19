@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-18, 19:59:52-0500
+ * Last updated: 2021-01-18, 20:08:04-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -154,12 +154,12 @@ private toHexAddress(ip) {
     try {
         def parts = manualAddress.split(":")
         if (parts.length != 2) {
-            return nil
+            return null
         }
 
         def octets = parts[0].split("\\.")
         if (octets.length != 4) {
-            return nil
+            return null
         }
         
         def intOctets = strArrToIntArr(octets)
@@ -171,7 +171,7 @@ private toHexAddress(ip) {
         return "${hexIp}:${hexPort}"
     } catch (Exception e) {
         log.error(e)
-        return nil
+        return null
     }
 }
 

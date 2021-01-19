@@ -2,7 +2,7 @@
  * WeMo Motion driver
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-18, 20:01:53-0500
+ * Last updated: 2021-01-18, 20:11:09-0500
  *
  * Based on the original Wemo Motion driver by SmartThings, 2013-10-11.
  *
@@ -42,13 +42,13 @@ metadata {
             name: 'ipAddress',
             type: 'string',
             title: 'IP address',
-            defaultValue: hexToIp(getDataValue('ip') ?: "00000000")
+            defaultValue: hexToIp(getDataValue('ip'))
         )
         input(
             name: 'ipPort',
             type: 'number',
             title: 'IP port',
-            defaultValue: HexUtils.hexStringToInt(getDataValue('port') ?: "0")
+            defaultValue: hexToInt(getDataValue('port'))
         )
     }
 }
@@ -175,4 +175,23 @@ private debugLog(message) {
 
 private syncTime() {
     parent.childSyncTime(device)
+}
+
+private hexToIp(hex) {
+    if (hex == null) {
+        return null
+    }
+    return [
+        HexUtils.hexStringToInt(hex[0..1]),
+        HexUtils.hexStringToInt(hex[2..3]),
+        HexUtils.hexStringToInt(hex[4..5]),
+        HexUtils.hexStringToInt(hex[6..7])
+    ].join('.')
+}
+
+private hexToInt(hex) {
+    if (hex == null) {
+        return null
+    }
+    return HexUtils.hexStringToInt(hex)
 }
