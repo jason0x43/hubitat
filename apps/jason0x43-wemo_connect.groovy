@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-18, 20:14:03-0500
+ * Last updated: 2021-01-18, 20:16:56-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -30,8 +30,8 @@ definition(
     description: 'Allows you to integrate your WeMo devices with Hubitat.',
     singleInstance: true,
     iconUrl: 'https://s3.amazonaws.com/smartapp-icons/Partner/wemo.png',
-    iconX2Url: 'https://s3.amazonaws.com/smartapp-icons/Partner/wemo@2x.png'
-    importUrl: "https://raw.githubusercontent.com/jason0x43/hubitat/master/apps/jason0x43-wemo_connect.groovy"
+    iconX2Url: 'https://s3.amazonaws.com/smartapp-icons/Partner/wemo@2x.png',
+    importUrl: 'https://raw.githubusercontent.com/jason0x43/hubitat/master/apps/jason0x43-wemo_connect.groovy'
 )
 
 preferences {

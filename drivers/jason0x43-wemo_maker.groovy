@@ -2,7 +2,7 @@
  * WeMo Maker driver
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-18, 20:15:28-0500
+ * Last updated: 2021-01-18, 20:17:10-0500
  *
  * Inspired by Chris Kitch's WeMo Maker driver
  * at https://github.com/Kriskit/SmartThingsPublic/blob/master/devicetypes/kriskit/wemo/wemo-maker.groovy
@@ -24,7 +24,7 @@ metadata {
     definition(
         name: 'Wemo Maker',
         namespace: 'jason0x43',
-        author: 'Jason Cheatham'
+        author: 'Jason Cheatham',
         importUrl: 'https://raw.githubusercontent.com/jason0x43/hubitat/master/drivers/jason0x43-wemo_maker.groovy'
     ) {
         capability 'Actuator'

@@ -2,7 +2,7 @@
  * WeMo Motion driver
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-18, 20:15:40-0500
+ * Last updated: 2021-01-18, 20:17:13-0500
  *
  * Based on the original Wemo Motion driver by SmartThings, 2013-10-11.
  *
@@ -25,7 +25,7 @@ metadata {
     definition(
         name: 'Wemo Motion',
         namespace: 'jason0x43',
-        author: 'Jason Cheatham'
+        author: 'Jason Cheatham',
         importUrl: 'https://raw.githubusercontent.com/jason0x43/hubitat/master/drivers/jason0x43-wemo_motion.groovy'
     ) {
         capability 'Motion Sensor'
