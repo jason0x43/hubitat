@@ -2,7 +2,7 @@
  * WeMo Insight Switch driver
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-18, 20:09:40-0500
+ * Last updated: 2021-01-18, 20:15:15-0500
  *
  * Based on the original Wemo Switch driver by Juan Risso at SmartThings,
  * 2015-10-11.
@@ -27,6 +27,7 @@ metadata {
         name: 'Wemo Insight Switch',
         namespace: 'jason0x43',
         author: 'Jason Cheatham'
+        importUrl: 'https://raw.githubusercontent.com/jason0x43/hubitat/master/drivers/jason0x43-wemo_insight_switch.groovy'
     ) {
         capability 'Actuator'
         capability 'Switch'
