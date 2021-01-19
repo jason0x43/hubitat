@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-18, 20:29:55-0500
+ * Last updated: 2021-01-19, 11:04:40-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -58,7 +58,7 @@ def mainPage() {
     state.lastRefresh = now()
 
     // ssdp request every 30 seconds
-    // discoverAllWemoTypes()
+    discoverAllWemoTypes()
 
     def devices = getKnownDevices()
     debugLog("mainPage: Known devices: ${devices}")
@@ -423,11 +423,15 @@ def handleSetupXml(body) {
         }
 
         if (entry) {
+            debugLog("handleSetupXml: Found existing device for ${device.mac}")
             def dev = entry.value
             debugLog("handleSetupXml: updating ${dev}")
             dev.name = friendlyName
             dev.verified = true
         } else {
+            // This should only occur for manual device discovery. Automatically
+            // discovered devices will have been found by handleSsdpEvent and
+            // added to the discovered devices list.
             debugLog("handleSetupXml: Adding ${device.macAddress} to list of known devices")
             def dev = [:]
             def hexAddress = toHexAddress(manualAddress)
