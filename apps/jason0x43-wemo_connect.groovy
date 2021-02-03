@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-02-02, 22:00:32-0500
+ * Last updated: 2021-02-02, 22:07:05-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -914,7 +914,7 @@ def childUpdatePort(child, port) {
             "childUpdatePort: ${child} - Updating port from ${existingPort} " +
             "to ${port}"
         )
-        def hexPort = HexUtils.integerToHexString(port, 2)
+        def hexPort = HexUtils.integerToHexString(port.toInteger(), 2)
         child.updateDataValue('port', hexPort)
     }
 }
