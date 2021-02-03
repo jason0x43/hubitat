@@ -1,0 +1,12 @@
+{
+  "author": "Jason Cheatham",
+  "gitHubUrl": "https://github.com/jasonx043",
+  "packages": [
+    {
+      "name": "Wemo App and Drivers",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/jason0x43/hubitat/master/packageManifest-wemo.json",
+      "description": "An app and drivers supporting Belkin Wemo devices"
+    }
+  ]
+}

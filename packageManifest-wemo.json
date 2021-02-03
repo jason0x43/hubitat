@@ -1,0 +1,55 @@
+{
+  "packageName": "Wemo App and Drivers",
+  "author": "Jason Cheatham",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.1.0",
+  "dateReleased": "2021-02-02",
+  "apps": [
+    {
+      "id": "2a4ef4ec-aa37-4e9f-a288-a92cef5e274b",
+      "name": "Wemo Connect",
+      "namespace": "jason0x43",
+      "location": "https://raw.githubusercontent.com/jason0x43/hubitat/master/apps/jason0x43-wemo_connect.groovy",
+      "required": true,
+      "oauth": false,
+      "primary": false
+    }
+  ],
+  "drivers": [
+    {
+      "id": "f99161ec-b817-48d8-b5f5-90a53f396577",
+      "name": "Wemo Dimmer",
+      "namespace": "jason0x43",
+      "location": "https://raw.githubusercontent.com/jason0x43/hubitat/master/drivers/jason0x43-wemo_dimmer.groovy",
+      "required": false
+    },
+    {
+      "id": "e2ff9634-3801-4560-beb9-d6cf62b2c67b",
+      "name": "Wemo Insight",
+      "namespace": "jason0x43",
+      "location": "https://raw.githubusercontent.com/jason0x43/hubitat/master/drivers/jason0x43-wemo_insight_switch.groovy",
+      "required": false
+    },
+    {
+      "id": "4436423c-765f-472f-a054-879dd4bddb19",
+      "name": "jason0x43",
+      "namespace": "Wemo Maker",
+      "location": "https://raw.githubusercontent.com/jason0x43/hubitat/master/drivers/jason0x43-wemo_maker.groovy",
+      "required": false
+    },
+    {
+      "id": "a30c8094-acbe-43c3-8a4f-39a398b01172",
+      "name": "jason0x43",
+      "namespace": "Wemo Motion",
+      "location": "https://raw.githubusercontent.com/jason0x43/hubitat/master/drivers/jason0x43-wemo_motion.groovy",
+      "required": false
+    },
+    {
+      "id": "be16fda5-f090-4cb1-86cc-006dfec3721f",
+      "name": "jason0x43",
+      "namespace": "Wemo Switch",
+      "location": "https://raw.githubusercontent.com/jason0x43/hubitat/master/drivers/jason0x43-wemo_switch.groovy",
+      "required": false
+    }
+  ]
+}
