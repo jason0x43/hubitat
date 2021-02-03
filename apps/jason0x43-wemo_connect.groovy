@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-01-19, 23:20:49-0500
+ * Last updated: 2021-02-02, 21:15:10-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -465,9 +465,22 @@ def handleSetupXml(hexIp, body) {
             )
             discoveredDevice.name = friendlyName
             discoveredDevice.verified = true
+
             // Ensure the device is using the MAC from setup.xml, which may be
             // 1 off from the MAC used for the SSDP message.
             discoveredDevice.mac = mac
+
+            // Ensure the device is using the current ip and port
+            discoveredDevice.ip = hexIp.split(":")[1]
+            discoveredDevice.port = hexIp.split(":")[1]
+
+            // If there's an existing child device for this discovered device,
+            // ensure its address and port are up-to-date
+            def child = getChildDevice(mac)
+            if (child != null) {
+                debugLog("handleSetupXml: Updating IP address for ${child} [${mac}]")
+                updateChildAddress(child, ip, port)
+            }
         } else {
             // This should only occur for manual device discovery. Automatically
             // discovered devices will have been found by handleSsdpEvent and
