@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-02-02, 21:15:10-0500
+ * Last updated: 2021-02-02, 22:00:32-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -471,7 +471,7 @@ def handleSetupXml(hexIp, body) {
             discoveredDevice.mac = mac
 
             // Ensure the device is using the current ip and port
-            discoveredDevice.ip = hexIp.split(":")[1]
+            discoveredDevice.ip = hexIp.split(":")[0]
             discoveredDevice.port = hexIp.split(":")[1]
 
             // If there's an existing child device for this discovered device,
