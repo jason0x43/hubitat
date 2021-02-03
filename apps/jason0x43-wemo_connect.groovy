@@ -2,7 +2,7 @@
  * WeMo Connect
  *
  * Author: Jason Cheatham
- * Last updated: 2021-02-02, 22:07:05-0500
+ * Last updated: 2021-02-03, 09:30:57-0500
  *
  * Based on the original Wemo (Connect) Advanced app by SmartThings, updated by
  * superuser-ule 2016-02-24
@@ -233,7 +233,12 @@ def childGetHostAddress(child) {
     def hexPort = child.getDataValue('port')
     debugLog("childGetHostAddress: hexIp = ${hexIp}")
     debugLog("childGetHostAddress: hexPort = ${hexPort}")
-    toDecimalAddress("${hexIp}:${hexPort}")
+    try {
+        return toDecimalAddress("${hexIp}:${hexPort}")
+    } catch (Throwable t) {
+        info.warn("Error parsing child address: $t");
+        return null
+    }
 }
 
 def childGetBinaryState(child) {
@@ -511,7 +516,7 @@ def handleSsdpEvent(evt) {
 }
 
 private hexToInt(hex) {
-    Integer.parseInt(hex,16)
+    Integer.parseInt(hex, 16)
 }
 
 private hexToIp(hex) {
@@ -624,8 +629,16 @@ private getKnownDevices() {
     debugLog("getKnownDevices: Known devices: ${knownDevices}")
 
     knownDevices.each { mac, device ->
-        def address = "${hexToIp(device.ip)}:${hexToInt(device.port)}"
+        def address
+        try {
+            address = "${hexToIp(device.ip)}:${hexToInt(device.port)}"
+        } catch (Throwable t) {
+            address = "<unknown>"
+            log.warn("Error parsing device address: $t");
+        }
+
         def text = "${device.name} [MAC: ${mac}, IP: ${address}"
+
         if (device.typeName) {
             def needsUpdate = device.needsUpdate
                 ? '&nbsp;&nbsp;<< Driver needs update >>'
@@ -641,7 +654,14 @@ private getKnownDevices() {
 }
 
 private getSetupXml(hexIpAddress) {
-    def hostAddress = toDecimalAddress(hexIpAddress)
+    def hostAddress
+    try {
+        hostAddress = toDecimalAddress(hexIpAddress)
+    } catch (Throwable t) {
+        log.warn("Error parsing address ${hexIpAddress}: $t")
+        return
+    }
+
     debugLog("getSetupXml: requesting setup.xml for ${hostAddress}")
     httpGet([
         uri: "http://${hostAddress}/setup.xml",
@@ -873,26 +893,47 @@ private updateChildAddress(child, ip, port) {
         "updateChildAddress: Updating address of ${child} to ${ip}:${port}"
     )
     def address = "${ip}:${port}"
+
+    def decimalAddress
+    try {
+        decimalAddress = toDecimalAddress(address)
+    } catch (Throwable t) {
+        log.warn("Error parsing address ${address}: $t")
+        decimalAddress = "<unknown>"
+    }
+
     log.info(
-        "Verifying that IP for ${child} is set to ${toDecimalAddress(address)}"
+        "Verifying that IP for ${child} is set to ${decimalAddress}"
     )
 
     def existingIp = child.getDataValue('ip')
     def existingPort = child.getDataValue('port')
 
-    if (ip && ip != existingIp) {
-        debugLog(
-            "childSync: Updating IP from ${hexToIp(existingIp)} to " +
-            "${hexToIp(ip)}"
-        )
+    if (ip && existingIp && ip != existingIp) {
+        try {
+            debugLog(
+                "childSync: Updating IP from ${hexToIp(existingIp)} to " +
+                "${hexToIp(ip)}"
+            )
+        } catch (Throwable t) {
+            log.warn("Error parsing addresses $existingIp, $ip: $t")
+            debugLog("childSync: Updating IP from ${existingIp} to ${ip}")
+        }
         child.updateDataValue('ip', ip)
     }
 
-    if (port && port != existingPort) {
-        debugLog(
-            "childSync: Updating port from ${hexToInt(existingPort)} to " +
-            "${hexToInt(port)}"
-        )
+    if (port != null && existingPort != null && port != existingPort) {
+        try {
+            debugLog(
+                "childSync: Updating port from ${hexToInt(existingPort)} to " +
+                "${hexToInt(port)}"
+            )
+        } catch (Throwable t) {
+            log.warn("Error parsing ports $existingPort, $port: $t")
+            debugLog(
+                "childSync: Updating port from ${existingPort} to ${port}"
+            )
+        }
         child.updateDataValue('port', port)
     }
 
@@ -931,7 +972,7 @@ def childUpdateIp(child, ip) {
     }
     
     def existingHexIp = child.getDataValue('ip')
-    def existingIp = hexToIp(existingHexIp)
+    def existingIp = existingHexIp != null ? hexToIp(existingHexIp) : null
 
     if (ip && ip != existingIp) {
         debugLog(
