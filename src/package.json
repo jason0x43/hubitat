@@ -18,7 +18,7 @@
     "html-entities": "^1.2.1",
     "node-fetch": "~2.6.1",
     "source-map-support": "~0.5.12",
-    "ws": "~6.1.4"
+    "ws": "~7.4.6"
   },
   "devDependencies": {
     "@types/cheerio": "~0.22.11",
