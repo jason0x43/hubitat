@@ -32,15 +32,15 @@
     },
     {
       "id": "4436423c-765f-472f-a054-879dd4bddb19",
-      "name": "jason0x43",
-      "namespace": "Wemo Maker",
+      "name": "Wemo Maker",
+      "namespace": "jason0x43",
       "location": "https://raw.githubusercontent.com/jason0x43/hubitat/master/drivers/jason0x43-wemo_maker.groovy",
       "required": false
     },
     {
       "id": "a30c8094-acbe-43c3-8a4f-39a398b01172",
-      "name": "jason0x43",
-      "namespace": "Wemo Motion",
+      "name": "Wemo Motion",
+      "namespace": "jason0x43",
       "location": "https://raw.githubusercontent.com/jason0x43/hubitat/master/drivers/jason0x43-wemo_motion.groovy",
       "required": false
     },
