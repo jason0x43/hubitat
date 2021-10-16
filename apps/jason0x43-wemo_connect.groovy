@@ -167,7 +167,7 @@ def childGetHostAddress(device) {
     try {
         return toDecimalAddress("${hexIp}:${hexPort}")
     } catch (Throwable t) {
-        info.warn("Error parsing child address: $t");
+        log.warn("Error parsing child address: $t");
         return null
     }
 }
