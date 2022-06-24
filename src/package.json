@@ -16,7 +16,7 @@
     "dotenv-safe": "^6.1.0",
     "easy-table": "^1.1.1",
     "html-entities": "^1.2.1",
-    "node-fetch": "~2.6.1",
+    "node-fetch": "~2.6.7",
     "source-map-support": "~0.5.12",
     "ws": "~6.1.4"
   },
