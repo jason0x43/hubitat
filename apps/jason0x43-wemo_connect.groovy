@@ -845,7 +845,7 @@ private updateChildAddress(child, ip, port) {
     )
 
     def existingIp = child.getDataValue('ip')
-    if (ip && existingIp && ip != existingIp) {
+    if ((ip != null && existingIp != null && ip != existingIp) || (existingIp == null && ip != null)) {
         try {
             debugLog(
                 "childSync: Updating IP from ${hexToIp(existingIp)} to " +
